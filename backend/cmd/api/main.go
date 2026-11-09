@@ -1,0 +1,70 @@
+package main
+
+import (
+	"context"
+	"errors"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"simplejourney/helpdesk/backend/internal/config"
+	"simplejourney/helpdesk/backend/internal/repository"
+	"simplejourney/helpdesk/backend/migrations"
+)
+
+func main() {
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("konfigurasi gagal dimuat: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	pool, err := repository.NewPostgresPool(ctx, cfg.DatabaseURL)
+	if err != nil {
+		log.Printf("peringatan: koneksi database belum tersedia: %v", err)
+	} else {
+		defer pool.Close()
+		if err := migrations.Run(context.Background(), pool); err != nil {
+			log.Fatalf("migrasi skema gagal: %v", err)
+		}
+		log.Println("migrasi skema database berhasil dijalankan")
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	})
+
+	srv := &http.Server{
+		Addr:         ":" + cfg.Port,
+		Handler:      mux,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	go func() {
+		log.Printf("server helpdesk berjalan pada port %s", cfg.Port)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("server berhenti dengan error: %v", err)
+		}
+	}()
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+	<-stop
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Printf("gagal shutdown server: %v", err)
+	}
+}
