@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"simplejourney/helpdesk/backend/internal/config"
+	"simplejourney/helpdesk/backend/internal/domain"
 	"simplejourney/helpdesk/backend/internal/handler"
 	"simplejourney/helpdesk/backend/internal/middleware"
 	"simplejourney/helpdesk/backend/internal/repository"
@@ -44,6 +45,9 @@ func main() {
 	authService := service.NewAuthService(userRepo, cfg.JWTSecret)
 	authHandler := handler.NewAuthHandler(authService)
 
+	userService := service.NewUserService(userRepo)
+	userHandler := handler.NewUserHandler(userService)
+
 	limiter := middleware.NewIPRateLimiter(cfg.RateLimitRPS, cfg.RateLimitBurst)
 
 	r := chi.NewRouter()
@@ -65,6 +69,12 @@ func main() {
 		api.Group(func(protected chi.Router) {
 			protected.Use(middleware.Authenticate(cfg.JWTSecret))
 			protected.Get("/me", authHandler.Me)
+
+			protected.Group(func(admin chi.Router) {
+				admin.Use(middleware.RequireRoles(domain.RoleAdmin))
+				admin.Get("/users", userHandler.List)
+				admin.Patch("/users/{id}/role", userHandler.UpdateRole)
+			})
 		})
 	})
 
