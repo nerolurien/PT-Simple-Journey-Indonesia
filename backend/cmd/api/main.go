@@ -10,8 +10,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+
 	"simplejourney/helpdesk/backend/internal/config"
+	"simplejourney/helpdesk/backend/internal/handler"
+	"simplejourney/helpdesk/backend/internal/middleware"
 	"simplejourney/helpdesk/backend/internal/repository"
+	"simplejourney/helpdesk/backend/internal/service"
 	"simplejourney/helpdesk/backend/migrations"
 )
 
@@ -35,16 +40,37 @@ func main() {
 		log.Println("migrasi skema database berhasil dijalankan")
 	}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+	userRepo := repository.NewUserRepository(pool)
+	authService := service.NewAuthService(userRepo, cfg.JWTSecret)
+	authHandler := handler.NewAuthHandler(authService)
+
+	limiter := middleware.NewIPRateLimiter(cfg.RateLimitRPS, cfg.RateLimitBurst)
+
+	r := chi.NewRouter()
+	r.Use(middleware.SecurityHeaders)
+	r.Use(middleware.CORS(cfg.CORSAllowedOrigins))
+
+	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
 
+	r.Route("/api", func(api chi.Router) {
+		api.Route("/auth", func(auth chi.Router) {
+			auth.With(middleware.RateLimit(limiter)).Post("/register", authHandler.Register)
+			auth.With(middleware.RateLimit(limiter)).Post("/login", authHandler.Login)
+		})
+
+		api.Group(func(protected chi.Router) {
+			protected.Use(middleware.Authenticate(cfg.JWTSecret))
+			protected.Get("/me", authHandler.Me)
+		})
+	})
+
 	srv := &http.Server{
 		Addr:         ":" + cfg.Port,
-		Handler:      mux,
+		Handler:      r,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  60 * time.Second,
