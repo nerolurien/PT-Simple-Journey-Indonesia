@@ -39,6 +39,11 @@ type UpdateTicketInput struct {
 	AssigneeID *int64           `json:"assignee_id"`
 }
 
+type CreateCommentInput struct {
+	Body       string `json:"body"`
+	IsInternal bool   `json:"is_internal"`
+}
+
 func (s *TicketService) CreateTicket(ctx context.Context, requesterID int64, input CreateTicketInput) (*domain.Ticket, error) {
 	title := strings.TrimSpace(input.Title)
 	if title == "" {
@@ -173,3 +178,34 @@ func (s *TicketService) UpdateTicket(ctx context.Context, currentUserID int64, r
 
 	return updated, nil
 }
+
+func (s *TicketService) AddComment(ctx context.Context, currentUserID int64, role domain.Role, ticketID int64, input CreateCommentInput) (*domain.Comment, error) {
+	body := strings.TrimSpace(input.Body)
+	if body == "" {
+		return nil, fmt.Errorf("%w: isi komentar wajib diisi", ErrInvalidInput)
+	}
+
+	ticket, err := s.ticketRepo.GetByID(ctx, ticketID)
+	if err != nil {
+		return nil, err
+	}
+
+	if role == domain.RoleRequester {
+		if ticket.RequesterID != currentUserID {
+			return nil, domain.ErrUnauthorizedTicket
+		}
+		if input.IsInternal {
+			return nil, domain.ErrUnauthorizedTicket
+		}
+	}
+
+	comment := &domain.Comment{
+		TicketID:   ticketID,
+		AuthorID:   currentUserID,
+		Body:       body,
+		IsInternal: input.IsInternal && (role == domain.RoleAgent || role == domain.RoleAdmin),
+	}
+
+	return s.ticketRepo.CreateComment(ctx, comment)
+}
+

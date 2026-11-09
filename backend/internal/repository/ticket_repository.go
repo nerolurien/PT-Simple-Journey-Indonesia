@@ -306,3 +306,29 @@ func (r *TicketRepository) Update(ctx context.Context, t *domain.Ticket) (*domai
 
 	return r.GetByID(ctx, t.ID)
 }
+
+func (r *TicketRepository) CreateComment(ctx context.Context, c *domain.Comment) (*domain.Comment, error) {
+	query := `
+		INSERT INTO comments (ticket_id, author_id, body, is_internal, created_at)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, created_at
+	`
+	now := time.Now().UTC()
+	err := r.pool.QueryRow(ctx, query, c.TicketID, c.AuthorID, c.Body, c.IsInternal, now).Scan(&c.ID, &c.CreatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("create comment: %w", err)
+	}
+
+	authorQuery := `
+		SELECT id, name, email, role
+		FROM users
+		WHERE id = $1
+	`
+	var author domain.User
+	if err := r.pool.QueryRow(ctx, authorQuery, c.AuthorID).Scan(&author.ID, &author.Name, &author.Email, &author.Role); err == nil {
+		c.Author = &author
+	}
+
+	return c, nil
+}
+

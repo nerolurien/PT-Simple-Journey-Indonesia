@@ -79,6 +79,7 @@ func main() {
 				tickets.Get("/", ticketHandler.List)
 				tickets.Get("/{id}", ticketHandler.GetByID)
 				tickets.Patch("/{id}", ticketHandler.Update)
+				tickets.Post("/{id}/comments", ticketHandler.AddComment)
 			})
 
 			protected.Group(func(admin chi.Router) {

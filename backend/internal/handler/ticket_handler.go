@@ -193,3 +193,50 @@ func (h *TicketHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, ticket)
 }
+
+func (h *TicketHandler) AddComment(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "tidak terautentikasi")
+		return
+	}
+	role, ok := middleware.GetUserRole(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "tidak terautentikasi")
+		return
+	}
+
+	idStr := chi.URLParam(r, "id")
+	ticketID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "ID tiket tidak valid")
+		return
+	}
+
+	var input service.CreateCommentInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeError(w, http.StatusBadRequest, "format body request tidak valid")
+		return
+	}
+
+	comment, err := h.ticketService.AddComment(r.Context(), userID, role, ticketID, input)
+	if err != nil {
+		if errors.Is(err, service.ErrInvalidInput) {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if errors.Is(err, domain.ErrUnauthorizedTicket) {
+			writeError(w, http.StatusForbidden, "akses komentar tiket tidak diizinkan")
+			return
+		}
+		if errors.Is(err, domain.ErrTicketNotFound) {
+			writeError(w, http.StatusNotFound, "tiket tidak ditemukan")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "gagal menambahkan komentar")
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, comment)
+}
+
