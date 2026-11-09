@@ -48,6 +48,10 @@ func main() {
 	userService := service.NewUserService(userRepo)
 	userHandler := handler.NewUserHandler(userService)
 
+	ticketRepo := repository.NewTicketRepository(pool)
+	ticketService := service.NewTicketService(ticketRepo, userRepo)
+	ticketHandler := handler.NewTicketHandler(ticketService)
+
 	limiter := middleware.NewIPRateLimiter(cfg.RateLimitRPS, cfg.RateLimitBurst)
 
 	r := chi.NewRouter()
@@ -69,6 +73,13 @@ func main() {
 		api.Group(func(protected chi.Router) {
 			protected.Use(middleware.Authenticate(cfg.JWTSecret))
 			protected.Get("/me", authHandler.Me)
+
+			protected.Route("/tickets", func(tickets chi.Router) {
+				tickets.Post("/", ticketHandler.Create)
+				tickets.Get("/", ticketHandler.List)
+				tickets.Get("/{id}", ticketHandler.GetByID)
+				tickets.Patch("/{id}", ticketHandler.Update)
+			})
 
 			protected.Group(func(admin chi.Router) {
 				admin.Use(middleware.RequireRoles(domain.RoleAdmin))
