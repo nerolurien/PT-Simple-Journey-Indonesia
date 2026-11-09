@@ -1,0 +1,24 @@
+# Environment
+.env
+*.env.local
+
+# Operating System
+.DS_Store
+Thumbs.db
+
+# IDE & Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Backend
+backend/bin/
+backend/tmp/
+backend/*.exe
+coverage.out
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
