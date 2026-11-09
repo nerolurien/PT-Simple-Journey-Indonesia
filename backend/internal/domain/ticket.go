@@ -6,9 +6,11 @@ import (
 )
 
 var (
-	ErrInvalidStatusTransition = errors.New("perubahan status tiket tidak diizinkan")
-	ErrTicketNotFound          = errors.New("tiket tidak ditemukan")
-	ErrUnauthorizedTicket      = errors.New("akses tiket tidak diizinkan")
+	ErrInvalidTransition   = errors.New("alur transisi status tiket tidak valid")
+	ErrForbiddenTransition = errors.New("role Anda tidak memiliki izin untuk perubahan status tiket ini")
+	ErrTicketNotFound      = errors.New("tiket tidak ditemukan")
+	ErrUnauthorizedTicket  = errors.New("akses tiket tidak diizinkan")
+	ErrInvalidPriority     = errors.New("prioritas tiket tidak valid")
 )
 
 type Status string
@@ -59,29 +61,54 @@ type Ticket struct {
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 
-	Requester *User `json:"requester,omitempty"`
-	Assignee  *User `json:"assignee,omitempty"`
+	Requester *User     `json:"requester,omitempty"`
+	Assignee  *User     `json:"assignee,omitempty"`
+	Comments  []Comment `json:"comments,omitempty"`
 }
 
-func CanTransitionStatus(current, next Status, role Role) bool {
-	if current == next {
-		return true
+func ValidateStatusTransition(from, to Status, role Role, isOwner bool) error {
+	if from == to {
+		return nil
 	}
 
-	if role == RoleRequester {
-		return next == StatusClosed
-	}
+	switch {
+	case from == StatusOpen && to == StatusInProgress:
+		if role == RoleAgent || role == RoleAdmin {
+			return nil
+		}
+		return ErrForbiddenTransition
 
-	switch current {
-	case StatusOpen:
-		return next == StatusInProgress || next == StatusClosed
-	case StatusInProgress:
-		return next == StatusResolved || next == StatusOpen || next == StatusClosed
-	case StatusResolved:
-		return next == StatusClosed || next == StatusInProgress
-	case StatusClosed:
-		return next == StatusOpen
+	case from == StatusInProgress && to == StatusResolved:
+		if role == RoleAgent || role == RoleAdmin {
+			return nil
+		}
+		return ErrForbiddenTransition
+
+	case from == StatusResolved && to == StatusClosed:
+		if role == RoleAgent || role == RoleAdmin {
+			return nil
+		}
+		if role == RoleRequester && isOwner {
+			return nil
+		}
+		return ErrForbiddenTransition
+
+	case from == StatusResolved && to == StatusOpen:
+		if role == RoleRequester && isOwner {
+			return nil
+		}
+		return ErrForbiddenTransition
+
+	case from == StatusOpen && to == StatusClosed:
+		if role == RoleAdmin {
+			return nil
+		}
+		if role == RoleRequester && isOwner {
+			return nil
+		}
+		return ErrForbiddenTransition
+
 	default:
-		return false
+		return ErrInvalidTransition
 	}
 }
