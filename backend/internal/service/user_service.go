@@ -5,7 +5,6 @@ import (
 	"errors"
 
 	"simplejourney/helpdesk/backend/internal/domain"
-	"simplejourney/helpdesk/backend/internal/repository"
 )
 
 var (
@@ -13,11 +12,16 @@ var (
 	ErrInvalidRole          = errors.New("role tidak valid, pilih antara: requester, agent, atau admin")
 )
 
-type UserService struct {
-	userRepo *repository.UserRepository
+type UserManagementRepository interface {
+	List(ctx context.Context) ([]*domain.User, error)
+	UpdateRole(ctx context.Context, id int64, role domain.Role) error
 }
 
-func NewUserService(userRepo *repository.UserRepository) *UserService {
+type UserService struct {
+	userRepo UserManagementRepository
+}
+
+func NewUserService(userRepo UserManagementRepository) *UserService {
 	return &UserService{userRepo: userRepo}
 }
 

@@ -14,12 +14,24 @@ var (
 	ErrInvalidAssignee = errors.New("teknisi penugasan harus memiliki role agent atau admin")
 )
 
-type TicketService struct {
-	ticketRepo *repository.TicketRepository
-	userRepo   *repository.UserRepository
+type TicketRepository interface {
+	Create(ctx context.Context, t *domain.Ticket) (*domain.Ticket, error)
+	GetByID(ctx context.Context, id int64) (*domain.Ticket, error)
+	List(ctx context.Context, filter repository.TicketFilter) (*repository.TicketListResult, error)
+	Update(ctx context.Context, t *domain.Ticket) (*domain.Ticket, error)
+	CreateComment(ctx context.Context, c *domain.Comment) (*domain.Comment, error)
 }
 
-func NewTicketService(ticketRepo *repository.TicketRepository, userRepo *repository.UserRepository) *TicketService {
+type UserRepository interface {
+	GetByID(ctx context.Context, id int64) (*domain.User, error)
+}
+
+type TicketService struct {
+	ticketRepo TicketRepository
+	userRepo   UserRepository
+}
+
+func NewTicketService(ticketRepo TicketRepository, userRepo UserRepository) *TicketService {
 	return &TicketService{
 		ticketRepo: ticketRepo,
 		userRepo:   userRepo,
