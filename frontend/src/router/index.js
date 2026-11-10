@@ -21,7 +21,7 @@ const routes = [
   {
     path: '/tickets',
     name: 'tickets',
-    component: () => import('@/views/TicketsView.vue'),
+    component: () => import('@/views/TicketListView.vue'),
     meta: { requiresAuth: true }
   },
   {
