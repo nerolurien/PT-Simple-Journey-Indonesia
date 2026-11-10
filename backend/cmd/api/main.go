@@ -17,6 +17,7 @@ import (
 	"simplejourney/helpdesk/backend/internal/handler"
 	"simplejourney/helpdesk/backend/internal/middleware"
 	"simplejourney/helpdesk/backend/internal/repository"
+	"simplejourney/helpdesk/backend/internal/seeder"
 	"simplejourney/helpdesk/backend/internal/service"
 	"simplejourney/helpdesk/backend/migrations"
 )
@@ -39,6 +40,12 @@ func main() {
 			log.Fatalf("migrasi skema gagal: %v", err)
 		}
 		log.Println("migrasi skema database berhasil dijalankan")
+
+		if err := seeder.Seed(context.Background(), pool); err != nil {
+			log.Printf("peringatan: seeder awal gagal: %v", err)
+		} else {
+			log.Println("seeder data awal berhasil diverifikasi")
+		}
 	}
 
 	userRepo := repository.NewUserRepository(pool)
