@@ -1,0 +1,655 @@
+openapi: 3.0.3
+info:
+  title: Simple Journey Helpdesk API
+  description: API sistem manajemen tiket helpdesk operasional internal PT Simple Journey Indonesia.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080
+    description: Server Lokal Development
+  - url: http://localhost/api
+    description: Reverse Proxy Nginx Docker
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Masukkan token JWT dengan format Bearer <token>
+
+  schemas:
+    Role:
+      type: string
+      enum: [requester, agent, admin]
+      example: requester
+
+    Status:
+      type: string
+      enum: [open, in_progress, resolved, closed]
+      example: open
+
+    Priority:
+      type: string
+      enum: [low, medium, high, urgent]
+      example: medium
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: Budi Santoso
+        email:
+          type: string
+          format: email
+          example: admin@simplejourney.co.id
+        role:
+          $ref: '#/components/schemas/Role'
+        created_at:
+          type: string
+          format: date-time
+          example: '2026-11-10T08:00:00Z'
+
+    Comment:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 10
+        ticket_id:
+          type: integer
+          example: 1
+        author_id:
+          type: integer
+          example: 2
+        body:
+          type: string
+          example: Mohon kirimkan file log OpenVPN terbaru untuk diperiksa.
+        is_internal:
+          type: boolean
+          example: false
+        created_at:
+          type: string
+          format: date-time
+          example: '2026-11-10T08:30:00Z'
+        author:
+          $ref: '#/components/schemas/User'
+
+    Ticket:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        title:
+          type: string
+          example: Akses VPN kantor terputus setelah update Windows
+        description:
+          type: string
+          example: Koneksi OpenVPN gagal tersambung dengan error TLS handshake failed.
+        category:
+          type: string
+          example: Network
+        priority:
+          $ref: '#/components/schemas/Priority'
+        status:
+          $ref: '#/components/schemas/Status'
+        requester_id:
+          type: integer
+          example: 4
+        assignee_id:
+          type: integer
+          nullable: true
+          example: 2
+        created_at:
+          type: string
+          format: date-time
+          example: '2026-11-10T07:15:00Z'
+        updated_at:
+          type: string
+          format: date-time
+          example: '2026-11-10T08:00:00Z'
+        requester:
+          $ref: '#/components/schemas/User'
+        assignee:
+          $ref: '#/components/schemas/User'
+        comments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Comment'
+
+    RegisterRequest:
+      type: object
+      required: [name, email, password]
+      properties:
+        name:
+          type: string
+          example: Siti Rahmawati
+        email:
+          type: string
+          format: email
+          example: requester@simplejourney.co.id
+        password:
+          type: string
+          format: password
+          minLength: 8
+          example: Password123!
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          example: admin@simplejourney.co.id
+        password:
+          type: string
+          format: password
+          example: Password123!
+
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        user:
+          $ref: '#/components/schemas/User'
+
+    CreateTicketRequest:
+      type: object
+      required: [title, description, category, priority]
+      properties:
+        title:
+          type: string
+          example: Akses VPN kantor terputus setelah update Windows
+        description:
+          type: string
+          example: Koneksi OpenVPN gagal tersambung dengan error TLS handshake failed.
+        category:
+          type: string
+          example: Network
+        priority:
+          $ref: '#/components/schemas/Priority'
+
+    UpdateTicketRequest:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/Status'
+        priority:
+          $ref: '#/components/schemas/Priority'
+        assignee_id:
+          type: integer
+          nullable: true
+          example: 2
+
+    CreateCommentRequest:
+      type: object
+      required: [body]
+      properties:
+        body:
+          type: string
+          example: Log VPN telah saya kirimkan ke tim support.
+        is_internal:
+          type: boolean
+          default: false
+          example: false
+
+    UpdateRoleRequest:
+      type: object
+      required: [role]
+      properties:
+        role:
+          $ref: '#/components/schemas/Role'
+
+    TicketListResponse:
+      type: object
+      properties:
+        tickets:
+          type: array
+          items:
+            $ref: '#/components/schemas/Ticket'
+        total_count:
+          type: integer
+          example: 4
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 10
+        total_pages:
+          type: integer
+          example: 1
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: Email atau password salah
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Operasi berhasil dijalankan
+
+paths:
+  /healthz:
+    get:
+      summary: Health check server
+      responses:
+        '200':
+          description: Server sehat dan beroperasi
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /api/auth/register:
+    post:
+      summary: Pendaftaran akun baru (Role Requester)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Registrasi berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Data input tidak valid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Email sudah terdaftar
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Terlalu banyak permintaan (Rate limited)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/auth/login:
+    post:
+      summary: Masuk ke akun dan mendapatkan token JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Kredensial tidak valid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Terlalu banyak permintaan (Rate limited)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/me:
+    get:
+      summary: Mendapatkan profil pengguna yang sedang login
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Profil berhasil diambil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Tidak terautentikasi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/users:
+    get:
+      summary: Mendapatkan daftar seluruh pengguna (Khusus Admin)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Daftar pengguna berhasil diambil
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+        '401':
+          description: Tidak terautentikasi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Akses ditolak (Bukan Admin)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/users/{id}/role:
+    patch:
+      summary: Mengubah peran pengguna (Khusus Admin)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID pengguna target
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRoleRequest'
+      responses:
+        '200':
+          description: Role berhasil diperbarui
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          description: Admin tidak dapat mengubah role akun sendiri atau role tidak valid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Akses ditolak
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Pengguna tidak ditemukan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/tickets:
+    post:
+      summary: Membuat tiket bantuan baru
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTicketRequest'
+      responses:
+        '201':
+          description: Tiket berhasil dibuat
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ticket'
+        '400':
+          description: Data input tidak valid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Tidak terautentikasi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      summary: Mendapatkan daftar tiket dengan filter dan pagination
+      description: Jika role requester, data dibatasi secara ketat hanya pada tiket yang diajukan sendiri.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          description: Nomor halaman
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+          description: Jumlah data per halaman
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/Status'
+          description: Filter status tiket
+        - name: priority
+          in: query
+          schema:
+            $ref: '#/components/schemas/Priority'
+          description: Filter prioritas tiket
+        - name: assignee_id
+          in: query
+          schema:
+            type: integer
+          description: Filter teknisi penanggung jawab
+        - name: q
+          in: query
+          schema:
+            type: string
+          description: Pencarian substring judul tiket (case-insensitive)
+        - name: sort_by
+          in: query
+          schema:
+            type: string
+            enum: [created_at, updated_at, priority]
+            default: created_at
+          description: Kolom pengurutan (whitelist)
+        - name: order
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+          description: Urutan ascending atau descending
+      responses:
+        '200':
+          description: Daftar tiket berhasil diambil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketListResponse'
+        '401':
+          description: Tidak terautentikasi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/tickets/{id}:
+    get:
+      summary: Mendapatkan detail tiket dan komentar
+      description: Catatan internal (is_internal=true) dibersihkan untuk pengguna ber-role requester.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID tiket
+      responses:
+        '200':
+          description: Detail tiket berhasil diambil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ticket'
+        '401':
+          description: Tidak terautentikasi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Akses ditolak (Requester bukan pemilik tiket)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Tiket tidak ditemukan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    patch:
+      summary: Memperbarui status, prioritas, atau penugasan tiket
+      description: Menegakkan aturan State Machine Status Transition Matrix dan RBAC.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID tiket
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTicketRequest'
+      responses:
+        '200':
+          description: Tiket berhasil diperbarui
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ticket'
+        '400':
+          description: Nilai prioritas atau penugasan tidak valid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Tidak terautentikasi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Role tidak memiliki izin untuk perubahan ini
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Tiket tidak ditemukan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Alur transisi status tidak valid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/tickets/{id}/comments:
+    post:
+      summary: Menambahkan komentar atau catatan internal pada tiket
+      description: Hanya pemilik tiket (requester), agent, dan admin yang dapat berkomentar. Catatan internal hanya diizinkan untuk agent dan admin.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID tiket
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCommentRequest'
+      responses:
+        '201':
+          description: Komentar berhasil ditambahkan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
+        '400':
+          description: Isi komentar kosong
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Tidak terautentikasi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Akses komentar tidak diizinkan atau requester mencoba membuat catatan internal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Tiket tidak ditemukan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
