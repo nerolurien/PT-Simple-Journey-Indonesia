@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"simplejourney/helpdesk/backend/internal/domain"
+	"simplejourney/helpdesk/backend/internal/notification"
 	"simplejourney/helpdesk/backend/internal/repository"
 )
 
@@ -50,9 +51,10 @@ type TicketService struct {
 	userRepo       UserRepository
 	slaUrgentHours int
 	storageDir     string
+	hub            *notification.Hub
 }
 
-func NewTicketService(ticketRepo TicketRepository, userRepo UserRepository, slaUrgentHours int, storageDir string) *TicketService {
+func NewTicketService(ticketRepo TicketRepository, userRepo UserRepository, slaUrgentHours int, storageDir string, hub *notification.Hub) *TicketService {
 	if slaUrgentHours <= 0 {
 		slaUrgentHours = 2
 	}
@@ -64,6 +66,7 @@ func NewTicketService(ticketRepo TicketRepository, userRepo UserRepository, slaU
 		userRepo:       userRepo,
 		slaUrgentHours: slaUrgentHours,
 		storageDir:     storageDir,
+		hub:            hub,
 	}
 }
 
@@ -119,6 +122,17 @@ func (s *TicketService) CreateTicket(ctx context.Context, requesterID int64, inp
 		return nil, err
 	}
 	created.CalculateSLA(s.slaUrgentHours, time.Now().UTC())
+
+	if s.hub != nil {
+		s.hub.BroadcastToRoles(notification.Event{
+			Type:      "ticket_created",
+			TicketID:  created.ID,
+			Title:     created.Title,
+			Message:   fmt.Sprintf("Tiket baru #%d: %s", created.ID, created.Title),
+			CreatedAt: created.CreatedAt,
+		}, domain.RoleAgent, domain.RoleAdmin)
+	}
+
 	return created, nil
 }
 
@@ -240,6 +254,21 @@ func (s *TicketService) UpdateTicket(ctx context.Context, currentUserID int64, r
 
 	updated.CalculateSLA(s.slaUrgentHours, time.Now().UTC())
 
+	if s.hub != nil && input.Status != nil {
+		var targetUsers []int64
+		targetUsers = append(targetUsers, updated.RequesterID)
+		if updated.AssigneeID != nil {
+			targetUsers = append(targetUsers, *updated.AssigneeID)
+		}
+		s.hub.SendToUsers(notification.Event{
+			Type:      "ticket_status_updated",
+			TicketID:  updated.ID,
+			Title:     updated.Title,
+			Message:   fmt.Sprintf("Status tiket #%d diubah menjadi '%s'", updated.ID, updated.Status),
+			CreatedAt: time.Now().UTC(),
+		}, targetUsers...)
+	}
+
 	return updated, nil
 }
 
@@ -270,7 +299,43 @@ func (s *TicketService) AddComment(ctx context.Context, currentUserID int64, rol
 		IsInternal: input.IsInternal && (role == domain.RoleAgent || role == domain.RoleAdmin),
 	}
 
-	return s.ticketRepo.CreateComment(ctx, comment)
+	createdComment, err := s.ticketRepo.CreateComment(ctx, comment)
+	if err != nil {
+		return nil, err
+	}
+
+	if s.hub != nil {
+		if comment.IsInternal {
+			var targetUsers []int64
+			if ticket.AssigneeID != nil && *ticket.AssigneeID != currentUserID {
+				targetUsers = append(targetUsers, *ticket.AssigneeID)
+			}
+			s.hub.SendToUsers(notification.Event{
+				Type:      "ticket_comment_added",
+				TicketID:  ticket.ID,
+				Title:     ticket.Title,
+				Message:   fmt.Sprintf("Catatan internal baru pada tiket #%d", ticket.ID),
+				CreatedAt: time.Now().UTC(),
+			}, targetUsers...)
+		} else {
+			var targetUsers []int64
+			if ticket.RequesterID != currentUserID {
+				targetUsers = append(targetUsers, ticket.RequesterID)
+			}
+			if ticket.AssigneeID != nil && *ticket.AssigneeID != currentUserID {
+				targetUsers = append(targetUsers, *ticket.AssigneeID)
+			}
+			s.hub.SendToUsers(notification.Event{
+				Type:      "ticket_comment_added",
+				TicketID:  ticket.ID,
+				Title:     ticket.Title,
+				Message:   fmt.Sprintf("Komentar baru pada tiket #%d", ticket.ID),
+				CreatedAt: time.Now().UTC(),
+			}, targetUsers...)
+		}
+	}
+
+	return createdComment, nil
 }
 
 func ValidateAttachment(originalName string, sizeBytes int64, headerBytes []byte) (string, error) {

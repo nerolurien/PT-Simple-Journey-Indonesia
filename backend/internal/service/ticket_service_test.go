@@ -111,7 +111,7 @@ func (u *inMemoryUserRepo) GetByID(ctx context.Context, id int64) (*domain.User,
 func TestTicketAccess_IDORProtection(t *testing.T) {
 	repo := newInMemoryTicketRepo()
 	userRepo := &inMemoryUserRepo{users: make(map[int64]*domain.User)}
-	svc := NewTicketService(repo, userRepo, 2, t.TempDir())
+	svc := NewTicketService(repo, userRepo, 2, t.TempDir(), nil)
 	ctx := context.Background()
 
 	requesterA := int64(101) // Siti Rahmawati
@@ -166,7 +166,7 @@ func TestTicketAccess_IDORProtection(t *testing.T) {
 func TestTicketComments_InternalNoteFiltering(t *testing.T) {
 	repo := newInMemoryTicketRepo()
 	userRepo := &inMemoryUserRepo{users: make(map[int64]*domain.User)}
-	svc := NewTicketService(repo, userRepo, 2, t.TempDir())
+	svc := NewTicketService(repo, userRepo, 2, t.TempDir(), nil)
 	ctx := context.Background()
 
 	requesterID := int64(101) // Siti Rahmawati
@@ -330,7 +330,7 @@ func TestAttachment_ValidationAndSecurity(t *testing.T) {
 	repo := newInMemoryTicketRepo()
 	userRepo := &inMemoryUserRepo{users: make(map[int64]*domain.User)}
 	tempDir := t.TempDir()
-	svc := NewTicketService(repo, userRepo, 2, tempDir)
+	svc := NewTicketService(repo, userRepo, 2, tempDir, nil)
 	ctx := context.Background()
 
 	requesterA := int64(101)

@@ -16,6 +16,7 @@ import (
 	"simplejourney/helpdesk/backend/internal/domain"
 	"simplejourney/helpdesk/backend/internal/handler"
 	"simplejourney/helpdesk/backend/internal/middleware"
+	"simplejourney/helpdesk/backend/internal/notification"
 	"simplejourney/helpdesk/backend/internal/repository"
 	"simplejourney/helpdesk/backend/internal/seeder"
 	"simplejourney/helpdesk/backend/internal/service"
@@ -55,8 +56,10 @@ func main() {
 	userService := service.NewUserService(userRepo)
 	userHandler := handler.NewUserHandler(userService)
 
+	hub := notification.NewHub()
+
 	ticketRepo := repository.NewTicketRepository(pool)
-	ticketService := service.NewTicketService(ticketRepo, userRepo, cfg.SLAUrgentHours, cfg.StorageDir)
+	ticketService := service.NewTicketService(ticketRepo, userRepo, cfg.SLAUrgentHours, cfg.StorageDir, hub)
 	ticketHandler := handler.NewTicketHandler(ticketService)
 
 	limiter := middleware.NewIPRateLimiter(cfg.RateLimitRPS, cfg.RateLimitBurst)
@@ -72,6 +75,8 @@ func main() {
 	})
 
 	r.Route("/api", func(api chi.Router) {
+		api.Get("/notifications/stream", hub.HandleStream(cfg.JWTSecret))
+
 		api.Route("/auth", func(auth chi.Router) {
 			auth.With(middleware.RateLimit(limiter)).Post("/register", authHandler.Register)
 			auth.With(middleware.RateLimit(limiter)).Post("/login", authHandler.Login)
