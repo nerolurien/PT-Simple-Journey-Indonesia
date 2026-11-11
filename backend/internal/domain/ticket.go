@@ -64,9 +64,10 @@ type Ticket struct {
 	IsSLABreached    bool       `json:"is_sla_breached"`
 	SLADeadline      *time.Time `json:"sla_deadline,omitempty"`
 
-	Requester *User     `json:"requester,omitempty"`
-	Assignee  *User     `json:"assignee,omitempty"`
-	Comments  []Comment `json:"comments,omitempty"`
+	Requester   *User        `json:"requester,omitempty"`
+	Assignee    *User        `json:"assignee,omitempty"`
+	Comments    []Comment    `json:"comments,omitempty"`
+	Attachments []Attachment `json:"attachments,omitempty"`
 }
 
 func (t *Ticket) CalculateSLA(urgentHours int, now time.Time) {

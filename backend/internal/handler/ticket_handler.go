@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -238,5 +239,102 @@ func (h *TicketHandler) AddComment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, comment)
+}
+
+func (h *TicketHandler) UploadAttachment(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "tidak terautentikasi")
+		return
+	}
+	role, ok := middleware.GetUserRole(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "tidak terautentikasi")
+		return
+	}
+
+	idStr := chi.URLParam(r, "id")
+	ticketID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "ID tiket tidak valid")
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 5<<20+1024)
+	if err := r.ParseMultipartForm(5 << 20); err != nil {
+		writeError(w, http.StatusUnprocessableEntity, "ukuran file melebihi batas maksimal 5 MB")
+		return
+	}
+
+	file, fileHeader, err := r.FormFile("file")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "file lampiran wajib diunggah dalam field 'file'")
+		return
+	}
+	defer file.Close()
+
+	att, err := h.ticketService.UploadAttachment(r.Context(), userID, role, ticketID, fileHeader.Filename, fileHeader.Size, file)
+	if err != nil {
+		if errors.Is(err, domain.ErrFileTooLarge) || errors.Is(err, domain.ErrInvalidFileType) {
+			writeError(w, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
+		if errors.Is(err, domain.ErrUnauthorizedTicket) {
+			writeError(w, http.StatusForbidden, "akses tiket tidak diizinkan")
+			return
+		}
+		if errors.Is(err, domain.ErrTicketNotFound) {
+			writeError(w, http.StatusNotFound, "tiket tidak ditemukan")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "gagal mengunggah lampiran")
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, att)
+}
+
+func (h *TicketHandler) DownloadAttachment(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "tidak terautentikasi")
+		return
+	}
+	role, ok := middleware.GetUserRole(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "tidak terautentikasi")
+		return
+	}
+
+	ticketID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "ID tiket tidak valid")
+		return
+	}
+
+	attachmentID, err := strconv.ParseInt(chi.URLParam(r, "att_id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "ID lampiran tidak valid")
+		return
+	}
+
+	att, filePath, err := h.ticketService.DownloadAttachment(r.Context(), userID, role, ticketID, attachmentID)
+	if err != nil {
+		if errors.Is(err, domain.ErrUnauthorizedTicket) {
+			writeError(w, http.StatusForbidden, "akses lampiran tidak diizinkan")
+			return
+		}
+		if errors.Is(err, domain.ErrTicketNotFound) || errors.Is(err, domain.ErrAttachmentNotFound) {
+			writeError(w, http.StatusNotFound, "lampiran tidak ditemukan")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "gagal mengunduh lampiran")
+		return
+	}
+
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", att.OriginalName))
+	w.Header().Set("Content-Type", att.MimeType)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	http.ServeFile(w, r, filePath)
 }
 

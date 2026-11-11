@@ -121,6 +121,11 @@ func (r *TicketRepository) GetByID(ctx context.Context, id int64) (*domain.Ticke
 	}
 	t.Comments = comments
 
+	attachments, err := r.GetAttachmentsByTicketID(ctx, t.ID)
+	if err == nil {
+		t.Attachments = attachments
+	}
+
 	return &t, nil
 }
 
@@ -331,5 +336,85 @@ func (r *TicketRepository) CreateComment(ctx context.Context, c *domain.Comment)
 	}
 
 	return c, nil
+}
+
+func (r *TicketRepository) CreateAttachment(ctx context.Context, att *domain.Attachment) (*domain.Attachment, error) {
+	query := `
+		INSERT INTO ticket_attachments (ticket_id, uploader_id, original_name, stored_name, mime_type, size_bytes, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING id, created_at
+	`
+	now := time.Now().UTC()
+	err := r.pool.QueryRow(ctx, query, att.TicketID, att.UploaderID, att.OriginalName, att.StoredName, att.MimeType, att.SizeBytes, now).Scan(&att.ID, &att.CreatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("create attachment: %w", err)
+	}
+
+	var u domain.User
+	userQuery := `SELECT id, name, email, role FROM users WHERE id = $1`
+	if err := r.pool.QueryRow(ctx, userQuery, att.UploaderID).Scan(&u.ID, &u.Name, &u.Email, &u.Role); err == nil {
+		att.Uploader = &u
+	}
+
+	return att, nil
+}
+
+func (r *TicketRepository) GetAttachmentsByTicketID(ctx context.Context, ticketID int64) ([]domain.Attachment, error) {
+	query := `
+		SELECT
+			a.id, a.ticket_id, a.uploader_id, a.original_name, a.stored_name, a.mime_type, a.size_bytes, a.created_at,
+			u.id, u.name, u.email, u.role
+		FROM ticket_attachments a
+		JOIN users u ON a.uploader_id = u.id
+		WHERE a.ticket_id = $1
+		ORDER BY a.created_at ASC
+	`
+	rows, err := r.pool.Query(ctx, query, ticketID)
+	if err != nil {
+		return nil, fmt.Errorf("query ticket attachments: %w", err)
+	}
+	defer rows.Close()
+
+	attachments := make([]domain.Attachment, 0)
+	for rows.Next() {
+		var a domain.Attachment
+		var u domain.User
+		if err := rows.Scan(
+			&a.ID, &a.TicketID, &a.UploaderID, &a.OriginalName, &a.StoredName, &a.MimeType, &a.SizeBytes, &a.CreatedAt,
+			&u.ID, &u.Name, &u.Email, &u.Role,
+		); err != nil {
+			return nil, fmt.Errorf("scan attachment row: %w", err)
+		}
+		a.Uploader = &u
+		attachments = append(attachments, a)
+	}
+
+	return attachments, rows.Err()
+}
+
+func (r *TicketRepository) GetAttachmentByID(ctx context.Context, ticketID, attachmentID int64) (*domain.Attachment, error) {
+	query := `
+		SELECT
+			a.id, a.ticket_id, a.uploader_id, a.original_name, a.stored_name, a.mime_type, a.size_bytes, a.created_at,
+			u.id, u.name, u.email, u.role
+		FROM ticket_attachments a
+		JOIN users u ON a.uploader_id = u.id
+		WHERE a.id = $1 AND a.ticket_id = $2
+	`
+	var a domain.Attachment
+	var u domain.User
+	err := r.pool.QueryRow(ctx, query, attachmentID, ticketID).Scan(
+		&a.ID, &a.TicketID, &a.UploaderID, &a.OriginalName, &a.StoredName, &a.MimeType, &a.SizeBytes, &a.CreatedAt,
+		&u.ID, &u.Name, &u.Email, &u.Role,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrAttachmentNotFound
+		}
+		return nil, fmt.Errorf("get attachment by id: %w", err)
+	}
+	a.Uploader = &u
+
+	return &a, nil
 }
 

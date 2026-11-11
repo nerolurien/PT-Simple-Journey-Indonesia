@@ -19,6 +19,7 @@ type Config struct {
 	RateLimitRPS       float64
 	RateLimitBurst     int
 	SLAUrgentHours     int
+	StorageDir         string
 }
 
 func Load() (*Config, error) {
@@ -76,6 +77,8 @@ func Load() (*Config, error) {
 		slaHours = 2
 	}
 
+	storageDir := getEnv("STORAGE_DIR", "./storage/attachments")
+
 	return &Config{
 		Port:               port,
 		Env:                env,
@@ -85,6 +88,7 @@ func Load() (*Config, error) {
 		RateLimitRPS:       rateRPS,
 		RateLimitBurst:     rateBurst,
 		SLAUrgentHours:     slaHours,
+		StorageDir:         storageDir,
 	}, nil
 }
 

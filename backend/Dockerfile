@@ -3,7 +3,7 @@ FROM golang:1.24-alpine AS builder
 
 WORKDIR /app
 
-RUN apk add --no-cache ca-certificates tzdata
+RUN apk add --no-cache ca-certificates tzdata && mkdir -p /app/storage/attachments
 
 COPY go.mod go.sum ./
 RUN go mod download
@@ -18,7 +18,7 @@ FROM alpine:3.20
 
 WORKDIR /app
 
-RUN apk add --no-cache ca-certificates tzdata
+RUN apk add --no-cache ca-certificates tzdata && mkdir -p /app/storage/attachments
 
 COPY --from=builder /app/bin/api /app/api
 COPY --from=builder /app/bin/seed /app/seed

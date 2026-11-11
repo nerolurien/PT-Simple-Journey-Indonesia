@@ -1,8 +1,11 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io"
+	"os"
 	"testing"
 	"time"
 
@@ -11,14 +14,16 @@ import (
 )
 
 type inMemoryTicketRepo struct {
-	tickets  map[int64]*domain.Ticket
-	comments map[int64][]domain.Comment
+	tickets     map[int64]*domain.Ticket
+	comments    map[int64][]domain.Comment
+	attachments map[int64][]domain.Attachment
 }
 
 func newInMemoryTicketRepo() *inMemoryTicketRepo {
 	return &inMemoryTicketRepo{
-		tickets:  make(map[int64]*domain.Ticket),
-		comments: make(map[int64][]domain.Comment),
+		tickets:     make(map[int64]*domain.Ticket),
+		comments:    make(map[int64][]domain.Comment),
+		attachments: make(map[int64][]domain.Attachment),
 	}
 }
 
@@ -37,6 +42,7 @@ func (m *inMemoryTicketRepo) GetByID(ctx context.Context, id int64) (*domain.Tic
 	}
 	cp := *t
 	cp.Comments = append([]domain.Comment(nil), m.comments[id]...)
+	cp.Attachments = append([]domain.Attachment(nil), m.attachments[id]...)
 	return &cp, nil
 }
 
@@ -69,6 +75,27 @@ func (m *inMemoryTicketRepo) CreateComment(ctx context.Context, c *domain.Commen
 	return c, nil
 }
 
+func (m *inMemoryTicketRepo) CreateAttachment(ctx context.Context, att *domain.Attachment) (*domain.Attachment, error) {
+	att.ID = int64(len(m.attachments[att.TicketID]) + 1)
+	att.CreatedAt = time.Now()
+	m.attachments[att.TicketID] = append(m.attachments[att.TicketID], *att)
+	return att, nil
+}
+
+func (m *inMemoryTicketRepo) GetAttachmentsByTicketID(ctx context.Context, ticketID int64) ([]domain.Attachment, error) {
+	return append([]domain.Attachment(nil), m.attachments[ticketID]...), nil
+}
+
+func (m *inMemoryTicketRepo) GetAttachmentByID(ctx context.Context, ticketID, attachmentID int64) (*domain.Attachment, error) {
+	for _, att := range m.attachments[ticketID] {
+		if att.ID == attachmentID {
+			cp := att
+			return &cp, nil
+		}
+	}
+	return nil, domain.ErrAttachmentNotFound
+}
+
 type inMemoryUserRepo struct {
 	users map[int64]*domain.User
 }
@@ -84,7 +111,7 @@ func (u *inMemoryUserRepo) GetByID(ctx context.Context, id int64) (*domain.User,
 func TestTicketAccess_IDORProtection(t *testing.T) {
 	repo := newInMemoryTicketRepo()
 	userRepo := &inMemoryUserRepo{users: make(map[int64]*domain.User)}
-	svc := NewTicketService(repo, userRepo, 2)
+	svc := NewTicketService(repo, userRepo, 2, t.TempDir())
 	ctx := context.Background()
 
 	requesterA := int64(101) // Siti Rahmawati
@@ -139,7 +166,7 @@ func TestTicketAccess_IDORProtection(t *testing.T) {
 func TestTicketComments_InternalNoteFiltering(t *testing.T) {
 	repo := newInMemoryTicketRepo()
 	userRepo := &inMemoryUserRepo{users: make(map[int64]*domain.User)}
-	svc := NewTicketService(repo, userRepo, 2)
+	svc := NewTicketService(repo, userRepo, 2, t.TempDir())
 	ctx := context.Background()
 
 	requesterID := int64(101) // Siti Rahmawati
@@ -297,4 +324,93 @@ func TestTicket_SLABreachCalculation(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAttachment_ValidationAndSecurity(t *testing.T) {
+	repo := newInMemoryTicketRepo()
+	userRepo := &inMemoryUserRepo{users: make(map[int64]*domain.User)}
+	tempDir := t.TempDir()
+	svc := NewTicketService(repo, userRepo, 2, tempDir)
+	ctx := context.Background()
+
+	requesterA := int64(101)
+	requesterB := int64(102)
+
+	ticket, err := repo.Create(ctx, &domain.Ticket{
+		Title:       "Kendala printer tidak merespons",
+		Description: "Printer kantor tidak dapat mencetak dokumen",
+		Category:    "Hardware",
+		Priority:    domain.PriorityMedium,
+		Status:      domain.StatusOpen,
+		RequesterID: requesterA,
+	})
+	if err != nil {
+		t.Fatalf("setup ticket failed: %v", err)
+	}
+
+	disallowedFiles := []struct {
+		name    string
+		content []byte
+	}{
+		{"script.sh", []byte("#!/bin/bash\necho bad")},
+		{"malware.exe", []byte("MZ\x90\x00\x03\x00\x00\x00")},
+		{"payload.html", []byte("<html><script>alert(1)</script></html>")},
+		{"vector.svg", []byte("<svg xmlns='http://www.w3.org/2000/svg'></svg>")},
+	}
+
+	for _, f := range disallowedFiles {
+		t.Run("reject_"+f.name, func(t *testing.T) {
+			_, err := svc.UploadAttachment(ctx, requesterA, domain.RoleRequester, ticket.ID, f.name, int64(len(f.content)), bytes.NewReader(f.content))
+			if !errors.Is(err, domain.ErrInvalidFileType) {
+				t.Errorf("expected ErrInvalidFileType for %s, got %v", f.name, err)
+			}
+		})
+	}
+
+	t.Run("reject_disguised_html_as_png", func(t *testing.T) {
+		badContent := []byte("<html><body>fake image</body></html>")
+		_, err := svc.UploadAttachment(ctx, requesterA, domain.RoleRequester, ticket.ID, "fake.png", int64(len(badContent)), bytes.NewReader(badContent))
+		if !errors.Is(err, domain.ErrInvalidFileType) {
+			t.Errorf("expected ErrInvalidFileType for disguised content, got %v", err)
+		}
+	})
+
+	t.Run("reject_oversized_file", func(t *testing.T) {
+		oversizedLen := int64(5*1024*1024 + 10)
+		dummyReader := io.LimitReader(bytes.NewReader(bytes.Repeat([]byte("A"), 1024)), oversizedLen)
+		_, err := svc.UploadAttachment(ctx, requesterA, domain.RoleRequester, ticket.ID, "huge.txt", oversizedLen, dummyReader)
+		if !errors.Is(err, domain.ErrFileTooLarge) {
+			t.Errorf("expected ErrFileTooLarge, got %v", err)
+		}
+	})
+
+	t.Run("successful_valid_text_upload_and_idor_protection", func(t *testing.T) {
+		validContent := []byte("Log error OpenVPN: connection timeout on port 1194\n")
+		att, err := svc.UploadAttachment(ctx, requesterA, domain.RoleRequester, ticket.ID, "openvpn.log", int64(len(validContent)), bytes.NewReader(validContent))
+		if err != nil {
+			t.Fatalf("expected successful upload, got %v", err)
+		}
+		if att.OriginalName != "openvpn.log" {
+			t.Errorf("expected original name 'openvpn.log', got %s", att.OriginalName)
+		}
+		if att.SizeBytes != int64(len(validContent)) {
+			t.Errorf("expected size %d, got %d", len(validContent), att.SizeBytes)
+		}
+
+		_, _, err = svc.DownloadAttachment(ctx, requesterB, domain.RoleRequester, ticket.ID, att.ID)
+		if !errors.Is(err, domain.ErrUnauthorizedTicket) {
+			t.Errorf("expected ErrUnauthorizedTicket for non-owner download, got %v", err)
+		}
+
+		dlAtt, dlPath, err := svc.DownloadAttachment(ctx, requesterA, domain.RoleRequester, ticket.ID, att.ID)
+		if err != nil {
+			t.Fatalf("expected owner download to succeed, got %v", err)
+		}
+		if dlAtt.ID != att.ID {
+			t.Errorf("expected attachment ID %d, got %d", att.ID, dlAtt.ID)
+		}
+		if _, err := os.Stat(dlPath); err != nil {
+			t.Errorf("expected downloaded file to exist on disk: %v", err)
+		}
+	})
 }

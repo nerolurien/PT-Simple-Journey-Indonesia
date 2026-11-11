@@ -56,7 +56,7 @@ func main() {
 	userHandler := handler.NewUserHandler(userService)
 
 	ticketRepo := repository.NewTicketRepository(pool)
-	ticketService := service.NewTicketService(ticketRepo, userRepo, cfg.SLAUrgentHours)
+	ticketService := service.NewTicketService(ticketRepo, userRepo, cfg.SLAUrgentHours, cfg.StorageDir)
 	ticketHandler := handler.NewTicketHandler(ticketService)
 
 	limiter := middleware.NewIPRateLimiter(cfg.RateLimitRPS, cfg.RateLimitBurst)
@@ -87,6 +87,8 @@ func main() {
 				tickets.Get("/{id}", ticketHandler.GetByID)
 				tickets.Patch("/{id}", ticketHandler.Update)
 				tickets.Post("/{id}/comments", ticketHandler.AddComment)
+				tickets.Post("/{id}/attachments", ticketHandler.UploadAttachment)
+				tickets.Get("/{id}/attachments/{att_id}", ticketHandler.DownloadAttachment)
 			})
 
 			protected.Group(func(admin chi.Router) {
