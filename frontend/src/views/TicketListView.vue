@@ -293,7 +293,15 @@ onMounted(() => {
                 <div class="text-[11px] text-zinc-500">{{ ticket.category }}</div>
               </td>
               <td class="py-3 px-4">
-                <StatusBadge :status="ticket.status" />
+                <div class="flex items-center space-x-1.5 flex-wrap gap-y-1">
+                  <StatusBadge :status="ticket.status" />
+                  <span
+                    v-if="ticket.is_sla_breached"
+                    class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-50 text-red-700 border border-red-200"
+                  >
+                    Terlambat (SLA)
+                  </span>
+                </div>
               </td>
               <td class="py-3 px-4">
                 <PriorityBadge :priority="ticket.priority" />
@@ -327,9 +335,15 @@ onMounted(() => {
         >
           <div class="flex items-center justify-between text-xs">
             <span class="font-mono text-zinc-500">#{{ ticket.id }}</span>
-            <div class="flex items-center space-x-1.5">
+            <div class="flex items-center space-x-1.5 flex-wrap">
               <PriorityBadge :priority="ticket.priority" />
               <StatusBadge :status="ticket.status" />
+              <span
+                v-if="ticket.is_sla_breached"
+                class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-50 text-red-700 border border-red-200"
+              >
+                Terlambat (SLA)
+              </span>
             </div>
           </div>
 

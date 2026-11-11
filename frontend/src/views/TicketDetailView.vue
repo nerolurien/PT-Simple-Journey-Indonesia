@@ -24,6 +24,11 @@ const isInternalNote = ref(false)
 const commentLoading = ref(false)
 const commentError = ref('')
 
+const uploading = ref(false)
+const uploadError = ref('')
+const uploadSuccess = ref('')
+const downloadingId = ref(null)
+
 const assignableAgents = ref([])
 
 const isOwner = computed(() => {
@@ -33,6 +38,75 @@ const isOwner = computed(() => {
 const isAdminOrAgent = computed(() => {
   return auth.isAdmin || auth.isAgent
 })
+
+function formatFileSize(bytes) {
+  if (!bytes || bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+}
+
+async function handleUploadAttachment(event) {
+  uploadError.value = ''
+  uploadSuccess.value = ''
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  const allowedExts = ['.png', '.jpg', '.jpeg', '.pdf', '.txt', '.log']
+  const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase()
+  if (!allowedExts.includes(ext)) {
+    uploadError.value = 'Tipe file tidak didukung. Format yang diizinkan: PNG, JPG, PDF, TXT, LOG.'
+    event.target.value = ''
+    return
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    uploadError.value = 'Ukuran file melebihi batas maksimal 5 MB.'
+    event.target.value = ''
+    return
+  }
+
+  uploading.value = true
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await api.post(`/tickets/${ticket.value.id}/attachments`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    if (!ticket.value.attachments) {
+      ticket.value.attachments = []
+    }
+    ticket.value.attachments.push(res.data)
+    uploadSuccess.value = 'Berkas berhasil diunggah'
+    event.target.value = ''
+  } catch (err) {
+    uploadError.value = err.response?.data?.error || 'Gagal mengunggah lampiran'
+  } finally {
+    uploading.value = false
+  }
+}
+
+async function downloadAttachment(att) {
+  downloadingId.value = att.id
+  try {
+    const res = await api.get(`/tickets/${ticket.value.id}/attachments/${att.id}`, {
+      responseType: 'blob'
+    })
+    const blobUrl = window.URL.createObjectURL(new Blob([res.data]))
+    const link = document.createElement('a')
+    link.href = blobUrl
+    link.setAttribute('download', att.original_name)
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(blobUrl)
+  } catch {
+    uploadError.value = 'Gagal mengunduh lampiran'
+  } finally {
+    downloadingId.value = null
+  }
+}
 
 function formatDate(dateStr) {
   if (!dateStr) return '-'
@@ -279,10 +353,16 @@ onMounted(() => {
       <div class="bg-white border border-zinc-200 rounded-lg p-5 shadow-2xs">
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <div class="flex items-center space-x-2">
+            <div class="flex items-center space-x-2 flex-wrap gap-y-1">
               <span class="font-mono text-xs text-zinc-500">#{{ ticket.id }}</span>
               <StatusBadge :status="ticket.status" />
               <PriorityBadge :priority="ticket.priority" />
+              <span
+                v-if="ticket.is_sla_breached"
+                class="px-2 py-0.5 rounded text-[10px] font-medium bg-red-50 text-red-700 border border-red-200"
+              >
+                Terlambat (SLA)
+              </span>
               <span class="text-xs text-zinc-400">|</span>
               <span class="text-xs text-zinc-600">{{ ticket.category }}</span>
             </div>
@@ -326,6 +406,73 @@ onMounted(() => {
             </h2>
             <div class="text-xs text-zinc-700 whitespace-pre-line leading-relaxed">
               {{ ticket.description }}
+            </div>
+          </div>
+
+          <!-- Attachments Section -->
+          <div class="bg-white border border-zinc-200 rounded-lg p-5 shadow-2xs">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-xs font-semibold text-zinc-800 uppercase tracking-wider">
+                Lampiran Berkas ({{ ticket.attachments?.length || 0 }})
+              </h2>
+              <label
+                v-if="isAdminOrAgent || isOwner"
+                class="inline-flex items-center px-2.5 py-1 border border-zinc-200 rounded text-xs font-medium text-zinc-700 bg-white hover:bg-zinc-50 cursor-pointer transition-colors"
+                :class="uploading ? 'opacity-50 cursor-not-allowed' : ''"
+              >
+                <span>{{ uploading ? 'Mengunggah...' : '+ Unggah Berkas' }}</span>
+                <input
+                  type="file"
+                  :disabled="uploading"
+                  accept=".png,.jpg,.jpeg,.pdf,.txt,.log"
+                  @change="handleUploadAttachment"
+                  class="sr-only"
+                />
+              </label>
+            </div>
+
+            <div v-if="uploadError" class="mb-3 p-2 rounded bg-rose-50 border border-rose-200 text-xs text-rose-700">
+              {{ uploadError }}
+            </div>
+            <div v-if="uploadSuccess" class="mb-3 p-2 rounded bg-emerald-50 border border-emerald-200 text-xs text-emerald-700">
+              {{ uploadSuccess }}
+            </div>
+
+            <div v-if="!ticket.attachments || ticket.attachments.length === 0" class="text-center py-5 text-xs text-zinc-400">
+              Belum ada berkas terlampir pada tiket ini.
+            </div>
+
+            <div v-else class="divide-y divide-zinc-100">
+              <div
+                v-for="att in ticket.attachments"
+                :key="att.id"
+                class="py-2.5 flex items-center justify-between text-xs"
+              >
+                <div class="flex items-center space-x-2 truncate pr-2">
+                  <span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-zinc-100 text-zinc-600">
+                    {{ att.mime_type.split('/')[1] || 'FILE' }}
+                  </span>
+                  <span class="font-medium text-zinc-800 truncate" :title="att.original_name">
+                    {{ att.original_name }}
+                  </span>
+                  <span class="text-zinc-400 text-[11px] whitespace-nowrap">
+                    ({{ formatFileSize(att.size_bytes) }})
+                  </span>
+                </div>
+                <div class="flex items-center space-x-3 shrink-0">
+                  <span class="text-[11px] text-zinc-400 hidden sm:inline">
+                    {{ formatDate(att.created_at) }}
+                  </span>
+                  <button
+                    type="button"
+                    :disabled="downloadingId === att.id"
+                    @click="downloadAttachment(att)"
+                    class="px-2 py-1 border border-zinc-200 rounded text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                  >
+                    {{ downloadingId === att.id ? 'Mengunduh...' : 'Unduh' }}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 

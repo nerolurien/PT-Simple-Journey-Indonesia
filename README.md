@@ -77,12 +77,14 @@ Spesifikasi lengkap tersedia dalam format OpenAPI 3.0 pada file `openapi.yaml`.
 - `GET /api/users` - Daftar seluruh pengguna (Khusus Admin).
 - `PATCH /api/users/{id}/role` - Pembaruan peran pengguna (Khusus Admin, tidak dapat mengubah role akun sendiri).
 
-### Tiket & Komentar
+### Tiket, Komentar & Lampiran
 - `POST /api/tickets` - Pembuatan tiket bantuan baru (Status awal: open).
 - `GET /api/tickets` - Daftar tiket dengan filter status, prioritas, pencarian judul (`q`), sorting whitelist, dan pagination. Otomatis dibatasi ke tiket milik sendiri jika requester.
-- `GET /api/tickets/{id}` - Detail tiket dan riwayat komentar. Catatan internal otomatis disaring untuk requester.
+- `GET /api/tickets/{id}` - Detail tiket, riwayat komentar, dan daftar lampiran berkas. Catatan internal otomatis disaring untuk requester.
 - `PATCH /api/tickets/{id}` - Pembaruan status (sesuai matriks transisi), prioritas, atau penugasan teknisi.
 - `POST /api/tickets/{id}/comments` - Penambahan komentar publik atau catatan internal (catatan internal hanya diizinkan untuk agent/admin).
+- `POST /api/tickets/{id}/attachments` - Unggah berkas lampiran pada tiket (batas 5 MB, validasi tipe file ganda).
+- `GET /api/tickets/{id}/attachments/{att_id}` - Unduh berkas lampiran dengan autentikasi dan proteksi IDOR.
 
 ## Menjalankan Unit & Integration Test
 
@@ -100,6 +102,8 @@ Pengujian mencakup:
 4. Penapisan catatan internal agar tidak bocor ke role requester.
 5. Proteksi pembaruan peran dan pencegahan admin mengubah role sendiri.
 6. Pengecekan strict algoritma JWT dan token-bucket rate limiter.
+7. Perhitungan SLA breach untuk tiket urgent yang belum ditangani vs tiket non-urgent.
+8. Keamanan upload berkas: penolakan ekstensi terlarang (.exe, .sh, .html, .svg), penolakan MIME terselubung, penolakan file melebihi batas 5 MB, serta proteksi IDOR pada unduhan lampiran.
 
 ---
 
@@ -110,19 +114,21 @@ Untuk backend, saya menyusun struktur kode ke dalam lapisan yang memiliki tanggu
 
 Saya menggunakan PostgreSQL 16 bersama library `pgx/v5` dan `pgxpool`. PostgreSQL dipilih karena integritas relasionalnya yang ketat melalui foreign key constraints (`ON DELETE RESTRICT` dan `ON DELETE CASCADE`), index performa, serta konsistensi transaksi ACID yang penting untuk status tiket bantuan.
 
-### 2. Implementasi Keamanan dan Validasi Status
+### 2. Implementasi Keamanan, Validasi Status & Fitur Tambahan
 - **Matriks Transisi Status:** Logika transisi tiket dipusatkan pada fungsi `ValidateStatusTransition` di domain layer. Saya membedakan secara tegas antara transisi yang secara state machine memang tidak valid (dikembalikan sebagai HTTP 422 Unprocessable Entity) dan transisi yang secara alur ada namun pengguna tidak berhak melakukannya (dikembalikan sebagai HTTP 403 Forbidden).
-- **Pencegahan IDOR (Insecure Direct Object References):** Pada level service, jika pengguna ber-role `requester`, query pencarian daftar tiket secara paksa menambahkan filter `requester_id = current_user_id`. Saat mengambil detail tiket atau mengirimkan komentar, kepemilikan tiket divalidasi terlebih dahulu sebelum operasi dijalankan.
+- **Pencegahan IDOR (Insecure Direct Object References):** Pada level service, jika pengguna ber-role `requester`, query pencarian daftar tiket secara paksa menambahkan filter `requester_id = current_user_id`. Saat mengambil detail tiket, mengunggah lampiran, atau mengunduh berkas, kepemilikan tiket divalidasi terlebih dahulu sebelum operasi dijalankan.
 - **Pembersihan Catatan Internal (OWASP A01):** Catatan internal (`is_internal = true`) tidak disembunyikan menggunakan manipulasi CSS di frontend, melainkan disaring langsung pada service layer Go sebelum data dienkode ke JSON. Dengan demikian, data internal tidak pernah keluar melalui jaringan ke klien pemohon.
 - **Pencegahan SQL Injection pada Sorting:** Kolom pengurutan data tiket diperiksa terhadap whitelist map (`created_at`, `updated_at`, `priority`). Jika nilai input tidak cocok, sistem otomatis menggunakan default `t.created_at DESC` tanpa melakukan interpolasi string mentah ke dalam query SQL.
+- **Keamanan Unggah Berkas (OWASP File Upload Security):** Untuk fitur bonus lampiran berkas, saya menerapkan validasi lapis ganda: whitelist ekstensi (`.png`, `.jpg`, `.jpeg`, `.pdf`, `.txt`, `.log`) dikombinasikan dengan magic-byte sniffing melalui `http.DetectContentType` pada 512 byte pertama (menolak executable dan script terselubung seperti file HTML yang disamarkan). Batas ukuran 5 MB ditegakkan via `http.MaxBytesReader`. Untuk mencegah path traversal, file disimpan dengan nama acak UUID pada direktori non-publik (`./storage/attachments`) dengan permission ketat, dan disajikan dengan header `Content-Disposition: attachment` serta `X-Content-Type-Options: nosniff`.
+- **Aturan SLA Tiket Urgent:** Tiket berprioritas `urgent` yang masih berstatus `open` melebihi ambang batas (`SLA_URGENT_HOURS`, default 2 jam) otomatis ditandai sebagai `is_sla_breached = true` dan memunculkan badge indikator merah "Terlambat (SLA)" pada antarmuka. Saat tiket berpindah ke `in_progress`, timestamp `first_responded_at` dicatat sebagai bukti audit waktu respon awal.
 
 ### 3. Kompromi Teknis Berdasarkan Batasan Waktu
 Dalam batas waktu pengerjaan tugas teknis ini, saya mengambil beberapa keputusan penyederhanaan:
 - **Rate Limiter In-Memory:** Rate limiter untuk proteksi endpoint login/registrasi diimplementasikan menggunakan algoritma token bucket in-memory per alamat IP klien dengan goroutine pembersih data usang berkala. Pendekatan ini menghindari ketergantungan infrastruktur Redis untuk deployment satu instance, namun siap dipindahkan ke Redis jika aplikasi di-deploy secara multi-node.
-- **Lampiran Berkas (File Attachments):** Penanganan kendala saat ini fokus pada teks deskripsi dan komentar terstruktur. Fitur upload berkas belum diimplementasikan untuk memprioritaskan kekokohan kontrol akses, migrasi database, dan pengujian unit.
+- **Penyimpanan Berkas Lokal Terisolasi:** Berkas lampiran disimpan pada volume direktori lokal terisolasi dalam container Docker. Pada skala enterprise, ini dapat dialihkan ke layanan Object Storage S3 yang kompatibel.
 
 ### 4. Rencana Pengembangan Lanjutan
 Apabila diberikan waktu pengembangan lebih lanjut, perbaikan yang akan saya prioritaskan adalah:
-1. **SLA Tracker Worker:** Membuat background worker terjadwal untuk menghitung pemenuhan SLA berdasarkan tingkat prioritas dan memicu eskalasi otomatis jika tiket berstatus urgent belum ditangani dalam jangka waktu tertentu.
-2. **Object Storage Integration:** Integrasi penyimpanan berkas ke AWS S3 atau MinIO menggunakan mekanisme presigned URL untuk lampiran tangkapan layar error atau file log teknis.
+1. **SLA Escalation Worker:** Membuat background worker terjadwal untuk mengirimkan notifikasi eskalasi otomatis ke email manager jika tiket berstatus urgent belum ditangani menjelang batas SLA.
+2. **Object Storage Integration:** Integrasi penyimpanan berkas ke AWS S3 atau MinIO menggunakan mekanisme presigned URL.
 3. **Pembaruan Real-time:** Menambahkan Server-Sent Events (SSE) atau WebSocket agar pembaruan status dan komentar baru dari teknisi dapat langsung tampil pada layar pemohon tanpa reload manual.

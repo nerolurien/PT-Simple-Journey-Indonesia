@@ -8,6 +8,35 @@ const router = useRouter()
 const loading = ref(false)
 const serverError = ref('')
 const validationErrors = ref({})
+const selectedFile = ref(null)
+const fileError = ref('')
+
+function handleFileChange(event) {
+  fileError.value = ''
+  const file = event.target.files[0]
+  if (!file) {
+    selectedFile.value = null
+    return
+  }
+
+  const allowedExts = ['.png', '.jpg', '.jpeg', '.pdf', '.txt', '.log']
+  const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase()
+  if (!allowedExts.includes(ext)) {
+    fileError.value = 'Tipe file tidak didukung. Format yang diizinkan: PNG, JPG, PDF, TXT, LOG.'
+    event.target.value = ''
+    selectedFile.value = null
+    return
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    fileError.value = 'Ukuran file melebihi batas maksimal 5 MB.'
+    event.target.value = ''
+    selectedFile.value = null
+    return
+  }
+
+  selectedFile.value = file
+}
 
 const form = reactive({
   title: '',
@@ -73,6 +102,19 @@ async function handleSubmit() {
     }
 
     const res = await api.post('/tickets', payload)
+
+    if (selectedFile.value) {
+      const formData = new FormData()
+      formData.append('file', selectedFile.value)
+      try {
+        await api.post(`/tickets/${res.data.id}/attachments`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        })
+      } catch (uploadErr) {
+        console.error('Lampiran gagal diunggah:', uploadErr)
+      }
+    }
+
     router.push(`/tickets/${res.data.id}`)
   } catch (err) {
     if (err.response?.data?.error) {
@@ -189,6 +231,27 @@ async function handleSubmit() {
           </div>
           <p v-if="validationErrors.description" class="mt-1 text-xs text-rose-600">
             {{ validationErrors.description }}
+          </p>
+        </div>
+
+        <div>
+          <label for="attachment" class="block text-xs font-medium text-zinc-700">
+            Lampiran File (Opsional)
+          </label>
+          <div class="mt-1">
+            <input
+              id="attachment"
+              type="file"
+              accept=".png,.jpg,.jpeg,.pdf,.txt,.log"
+              @change="handleFileChange"
+              class="block w-full text-xs text-zinc-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-zinc-100 file:text-zinc-700 hover:file:bg-zinc-200 cursor-pointer"
+            />
+          </div>
+          <p class="mt-1 text-[11px] text-zinc-400">
+            Format diizinkan: PNG, JPG, PDF, TXT, LOG. Maksimal 5 MB.
+          </p>
+          <p v-if="fileError" class="mt-1 text-xs text-rose-600">
+            {{ fileError }}
           </p>
         </div>
 

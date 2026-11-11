@@ -120,6 +120,51 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Comment'
+        first_responded_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2026-11-10T08:30:00Z'
+        is_sla_breached:
+          type: boolean
+          example: false
+        sla_deadline:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2026-11-10T09:15:00Z'
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Attachment'
+
+    Attachment:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        ticket_id:
+          type: integer
+          example: 1
+        uploader_id:
+          type: integer
+          example: 4
+        original_name:
+          type: string
+          example: openvpn.log
+        mime_type:
+          type: string
+          example: text/plain
+        size_bytes:
+          type: integer
+          example: 24510
+        created_at:
+          type: string
+          format: date-time
+          example: '2026-11-10T08:35:00Z'
+        uploader:
+          $ref: '#/components/schemas/User'
 
     RegisterRequest:
       type: object
@@ -653,3 +698,77 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+
+  /api/tickets/{id}/attachments:
+    post:
+      summary: Mengunggah lampiran berkas pada tiket
+      description: Batas maksimal 5 MB dengan validasi ekstensi dan magic-byte sniffing (PNG, JPG, PDF, TXT, LOG).
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID tiket
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Lampiran berhasil diunggah
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Attachment'
+        '401':
+          description: Tidak terautentikasi
+        '403':
+          description: Akses tiket tidak diizinkan
+        '404':
+          description: Tiket tidak ditemukan
+        '422':
+          description: Tipe file dilarang atau ukuran melebihi 5 MB
+
+  /api/tickets/{id}/attachments/{att_id}:
+    get:
+      summary: Mengunduh lampiran berkas tiket
+      description: Endpoint terautentikasi dengan proteksi IDOR dan header keamanan anti-sniffing.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID tiket
+        - name: att_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID lampiran
+      responses:
+        '200':
+          description: Berkas lampiran berhasil diunduh
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '401':
+          description: Tidak terautentikasi
+        '403':
+          description: Akses lampiran tidak diizinkan
+        '404':
+          description: Tiket atau lampiran tidak ditemukan
