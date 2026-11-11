@@ -4,7 +4,7 @@ Repositori ini berisi pengerjaan technical test Shift Engineer - Fullstack untuk
 
 ## Cara Menjalankan Aplikasi
 
-### 1. Menggunakan Docker Compose (Direkomendasikan)
+### 1. Menggunakan Docker Compose
 Pastikan Docker dan Docker Compose sudah berjalan di mesin lokal. Jalankan perintah berikut dari root direktori:
 
 ```bash
