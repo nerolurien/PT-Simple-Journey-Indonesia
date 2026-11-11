@@ -448,7 +448,7 @@ func (r *TicketRepository) GetAdminStats(ctx context.Context, slaUrgentHours int
 			{Priority: domain.PriorityHigh, Count: 0},
 			{Priority: domain.PriorityUrgent, Count: 0},
 		},
-		TopAgents: make([]domain.AgentResolvedCount, 0),
+		TopAgents: make([]domain.AgentWorkload, 0),
 	}
 
 	countQuery := `SELECT COUNT(*) FROM tickets`
@@ -508,20 +508,34 @@ func (r *TicketRepository) GetAdminStats(ctx context.Context, slaUrgentHours int
 	}
 
 	topAgentsQuery := `
-		SELECT u.id, u.name, u.email, COUNT(t.id) as resolved_count
+		SELECT 
+			u.id, 
+			u.name, 
+			u.email, 
+			u.role,
+			COUNT(t.id)::bigint AS assigned_total,
+			COUNT(CASE WHEN t.status IN ('open', 'in_progress') THEN 1 END)::bigint AS in_progress_count,
+			COUNT(CASE WHEN t.status IN ('resolved', 'closed') THEN 1 END)::bigint AS resolved_count,
+			COALESCE(
+				ROUND(
+					(COUNT(CASE WHEN t.status IN ('resolved', 'closed') THEN 1 END)::numeric / 
+					 NULLIF(COUNT(t.id), 0)::numeric) * 100, 
+					1
+				)::float8, 
+				0::float8
+			) AS completion_rate
 		FROM users u
-		JOIN tickets t ON t.assignee_id = u.id
-		WHERE t.status IN ('resolved', 'closed')
-		GROUP BY u.id, u.name, u.email
-		ORDER BY resolved_count DESC
-		LIMIT 5
+		LEFT JOIN tickets t ON t.assignee_id = u.id
+		WHERE u.role IN ('admin', 'agent')
+		GROUP BY u.id, u.name, u.email, u.role
+		ORDER BY resolved_count DESC, assigned_total DESC, u.name ASC
 	`
 	agentRows, err := r.pool.Query(ctx, topAgentsQuery)
 	if err == nil {
 		defer agentRows.Close()
 		for agentRows.Next() {
-			var ag domain.AgentResolvedCount
-			if err := agentRows.Scan(&ag.ID, &ag.Name, &ag.Email, &ag.ResolvedCount); err == nil {
+			var ag domain.AgentWorkload
+			if err := agentRows.Scan(&ag.ID, &ag.Name, &ag.Email, &ag.Role, &ag.AssignedTotal, &ag.InProgressCount, &ag.ResolvedCount, &ag.CompletionRate); err == nil {
 				stats.TopAgents = append(stats.TopAgents, ag)
 			}
 		}

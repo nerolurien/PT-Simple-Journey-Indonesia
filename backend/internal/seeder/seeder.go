@@ -28,6 +28,7 @@ type SeedTicket struct {
 	RequesterEmail string
 	AssigneeEmail  string
 	CreatedAt      *time.Time
+	UpdatedAt      *time.Time
 	Comments       []SeedComment
 }
 
@@ -94,6 +95,22 @@ func Seed(ctx context.Context, pool *pgxpool.Pool) error {
 		userMap[u.Email] = id
 	}
 
+	now := time.Now().UTC()
+	t1Created := now.Add(-10 * time.Hour)
+	t1Updated := now.Add(-2 * time.Hour)
+
+	t2Created := now.Add(-6 * time.Hour)
+	t2Updated := now.Add(-6 * time.Hour)
+
+	t3Created := now.Add(-8 * time.Hour)
+	t3Updated := now.Add(-2 * time.Hour) // 6 hours resolution
+
+	t4Created := now.Add(-12 * time.Hour)
+	t4Updated := now.Add(-9 * time.Hour) // 3 hours resolution (average: 4.5 hours)
+
+	t5Created := now.Add(-5 * time.Hour) // urgent open > 2 hours -> triggers SLA breach count >= 1
+	t5Updated := now.Add(-5 * time.Hour)
+
 	tickets := []SeedTicket{
 		{
 			Title:          "Akses VPN kantor terputus setelah update Windows",
@@ -103,6 +120,8 @@ func Seed(ctx context.Context, pool *pgxpool.Pool) error {
 			Status:         domain.StatusInProgress,
 			RequesterEmail: "requester@simplejourney.co.id",
 			AssigneeEmail:  "agent@simplejourney.co.id",
+			CreatedAt:      &t1Created,
+			UpdatedAt:      &t1Updated,
 			Comments: []SeedComment{
 				{
 					AuthorEmail: "agent@simplejourney.co.id",
@@ -129,6 +148,8 @@ func Seed(ctx context.Context, pool *pgxpool.Pool) error {
 			Status:         domain.StatusOpen,
 			RequesterEmail: "requester@simplejourney.co.id",
 			AssigneeEmail:  "",
+			CreatedAt:      &t2Created,
+			UpdatedAt:      &t2Updated,
 			Comments: []SeedComment{
 				{
 					AuthorEmail: "requester@simplejourney.co.id",
@@ -145,6 +166,8 @@ func Seed(ctx context.Context, pool *pgxpool.Pool) error {
 			Status:         domain.StatusResolved,
 			RequesterEmail: "dewi.lestari@simplejourney.co.id",
 			AssigneeEmail:  "agent@simplejourney.co.id",
+			CreatedAt:      &t3Created,
+			UpdatedAt:      &t3Updated,
 			Comments: []SeedComment{
 				{
 					AuthorEmail: "agent@simplejourney.co.id",
@@ -161,6 +184,8 @@ func Seed(ctx context.Context, pool *pgxpool.Pool) error {
 			Status:         domain.StatusClosed,
 			RequesterEmail: "dewi.lestari@simplejourney.co.id",
 			AssigneeEmail:  "admin@simplejourney.co.id",
+			CreatedAt:      &t4Created,
+			UpdatedAt:      &t4Updated,
 			Comments: []SeedComment{
 				{
 					AuthorEmail: "admin@simplejourney.co.id",
@@ -177,7 +202,8 @@ func Seed(ctx context.Context, pool *pgxpool.Pool) error {
 			Status:         domain.StatusOpen,
 			RequesterEmail: "dewi.lestari@simplejourney.co.id",
 			AssigneeEmail:  "",
-			CreatedAt:      func() *time.Time { t := time.Now().UTC().Add(-4 * time.Hour); return &t }(),
+			CreatedAt:      &t5Created,
+			UpdatedAt:      &t5Updated,
 			Comments: []SeedComment{
 				{
 					AuthorEmail: "dewi.lestari@simplejourney.co.id",
@@ -201,6 +227,15 @@ func Seed(ctx context.Context, pool *pgxpool.Pool) error {
 			}
 		}
 
+		createdAt := now
+		if t.CreatedAt != nil {
+			createdAt = *t.CreatedAt
+		}
+		updatedAt := createdAt
+		if t.UpdatedAt != nil {
+			updatedAt = *t.UpdatedAt
+		}
+
 		var ticketID int64
 		err := pool.QueryRow(ctx, `
 			SELECT id FROM tickets WHERE title = $1 AND requester_id = $2
@@ -208,21 +243,25 @@ func Seed(ctx context.Context, pool *pgxpool.Pool) error {
 
 		if err != nil {
 			if err == pgx.ErrNoRows {
-				now := time.Now().UTC()
-				createdAt := now
-				if t.CreatedAt != nil {
-					createdAt = *t.CreatedAt
-				}
 				err = pool.QueryRow(ctx, `
 					INSERT INTO tickets (title, description, category, priority, status, requester_id, assignee_id, first_responded_at, created_at, updated_at)
-					VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, $8, $8)
+					VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, $8, $9)
 					RETURNING id
-				`, t.Title, t.Description, t.Category, t.Priority, t.Status, requesterID, assigneeID, createdAt).Scan(&ticketID)
+				`, t.Title, t.Description, t.Category, t.Priority, t.Status, requesterID, assigneeID, createdAt, updatedAt).Scan(&ticketID)
 				if err != nil {
 					return fmt.Errorf("insert ticket %s: %w", t.Title, err)
 				}
 			} else {
 				return fmt.Errorf("query ticket %s: %w", t.Title, err)
+			}
+		} else {
+			_, err = pool.Exec(ctx, `
+				UPDATE tickets 
+				SET created_at = $1, updated_at = $2, priority = $3, status = $4, assignee_id = $5
+				WHERE id = $6
+			`, createdAt, updatedAt, t.Priority, t.Status, assigneeID, ticketID)
+			if err != nil {
+				return fmt.Errorf("update seed ticket %s: %w", t.Title, err)
 			}
 		}
 

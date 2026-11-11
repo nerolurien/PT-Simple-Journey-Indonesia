@@ -214,9 +214,21 @@ components:
               email:
                 type: string
                 example: agent@simplejourney.co.id
+              role:
+                type: string
+                example: agent
+              assigned_total:
+                type: integer
+                example: 8
+              in_progress_count:
+                type: integer
+                example: 2
               resolved_count:
                 type: integer
-                example: 12
+                example: 6
+              completion_rate:
+                type: number
+                example: 75.0
 
     RegisterRequest:
       type: object
