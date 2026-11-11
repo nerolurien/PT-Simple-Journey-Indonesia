@@ -418,3 +418,103 @@ func (r *TicketRepository) GetAttachmentByID(ctx context.Context, ticketID, atta
 	return &a, nil
 }
 
+func (r *TicketRepository) GetAdminStats(ctx context.Context, slaUrgentHours int) (*domain.AdminStats, error) {
+	if slaUrgentHours <= 0 {
+		slaUrgentHours = 2
+	}
+
+	stats := &domain.AdminStats{
+		StatusBreakdown: []domain.StatusCount{
+			{Status: domain.StatusOpen, Count: 0},
+			{Status: domain.StatusInProgress, Count: 0},
+			{Status: domain.StatusResolved, Count: 0},
+			{Status: domain.StatusClosed, Count: 0},
+		},
+		PriorityBreakdown: []domain.PriorityCount{
+			{Priority: domain.PriorityLow, Count: 0},
+			{Priority: domain.PriorityMedium, Count: 0},
+			{Priority: domain.PriorityHigh, Count: 0},
+			{Priority: domain.PriorityUrgent, Count: 0},
+		},
+		TopAgents: make([]domain.AgentResolvedCount, 0),
+	}
+
+	countQuery := `SELECT COUNT(*) FROM tickets`
+	if err := r.pool.QueryRow(ctx, countQuery).Scan(&stats.TotalTickets); err != nil {
+		return nil, fmt.Errorf("count total tickets: %w", err)
+	}
+
+	statusRows, err := r.pool.Query(ctx, `SELECT status, COUNT(*) FROM tickets GROUP BY status`)
+	if err != nil {
+		return nil, fmt.Errorf("query status breakdown: %w", err)
+	}
+	defer statusRows.Close()
+
+	statusMap := make(map[domain.Status]int64)
+	for statusRows.Next() {
+		var s domain.Status
+		var c int64
+		if err := statusRows.Scan(&s, &c); err == nil {
+			statusMap[s] = c
+		}
+	}
+	for i := range stats.StatusBreakdown {
+		stats.StatusBreakdown[i].Count = statusMap[stats.StatusBreakdown[i].Status]
+	}
+
+	priorityRows, err := r.pool.Query(ctx, `SELECT priority, COUNT(*) FROM tickets GROUP BY priority`)
+	if err != nil {
+		return nil, fmt.Errorf("query priority breakdown: %w", err)
+	}
+	defer priorityRows.Close()
+
+	priorityMap := make(map[domain.Priority]int64)
+	for priorityRows.Next() {
+		var p domain.Priority
+		var c int64
+		if err := priorityRows.Scan(&p, &c); err == nil {
+			priorityMap[p] = c
+		}
+	}
+	for i := range stats.PriorityBreakdown {
+		stats.PriorityBreakdown[i].Count = priorityMap[stats.PriorityBreakdown[i].Priority]
+	}
+
+	slaThreshold := time.Now().UTC().Add(-time.Duration(slaUrgentHours) * time.Hour)
+	slaQuery := `SELECT COUNT(*) FROM tickets WHERE priority = 'urgent' AND status = 'open' AND created_at < $1`
+	if err := r.pool.QueryRow(ctx, slaQuery, slaThreshold).Scan(&stats.SLABreachedCount); err != nil {
+		return nil, fmt.Errorf("count sla breached tickets: %w", err)
+	}
+
+	avgQuery := `
+		SELECT COALESCE(AVG(EXTRACT(EPOCH FROM (updated_at - created_at)) / 3600), 0)
+		FROM tickets
+		WHERE status IN ('resolved', 'closed')
+	`
+	if err := r.pool.QueryRow(ctx, avgQuery).Scan(&stats.AvgResolutionHours); err != nil {
+		return nil, fmt.Errorf("calc avg resolution hours: %w", err)
+	}
+
+	topAgentsQuery := `
+		SELECT u.id, u.name, u.email, COUNT(t.id) as resolved_count
+		FROM users u
+		JOIN tickets t ON t.assignee_id = u.id
+		WHERE t.status IN ('resolved', 'closed')
+		GROUP BY u.id, u.name, u.email
+		ORDER BY resolved_count DESC
+		LIMIT 5
+	`
+	agentRows, err := r.pool.Query(ctx, topAgentsQuery)
+	if err == nil {
+		defer agentRows.Close()
+		for agentRows.Next() {
+			var ag domain.AgentResolvedCount
+			if err := agentRows.Scan(&ag.ID, &ag.Name, &ag.Email, &ag.ResolvedCount); err == nil {
+				stats.TopAgents = append(stats.TopAgents, ag)
+			}
+		}
+	}
+
+	return stats, nil
+}
+

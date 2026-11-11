@@ -96,6 +96,12 @@ func (m *inMemoryTicketRepo) GetAttachmentByID(ctx context.Context, ticketID, at
 	return nil, domain.ErrAttachmentNotFound
 }
 
+func (m *inMemoryTicketRepo) GetAdminStats(ctx context.Context, slaUrgentHours int) (*domain.AdminStats, error) {
+	return &domain.AdminStats{
+		TotalTickets: int64(len(m.tickets)),
+	}, nil
+}
+
 type inMemoryUserRepo struct {
 	users map[int64]*domain.User
 }
@@ -413,4 +419,29 @@ func TestAttachment_ValidationAndSecurity(t *testing.T) {
 			t.Errorf("expected downloaded file to exist on disk: %v", err)
 		}
 	})
+}
+
+func TestTicketService_GetAdminStats(t *testing.T) {
+	repo := newInMemoryTicketRepo()
+	userRepo := &inMemoryUserRepo{users: make(map[int64]*domain.User)}
+	svc := NewTicketService(repo, userRepo, 2, t.TempDir(), nil)
+	ctx := context.Background()
+
+	_, err := svc.GetAdminStats(ctx, domain.RoleRequester)
+	if !errors.Is(err, domain.ErrUnauthorizedTicket) {
+		t.Fatalf("expected ErrUnauthorizedTicket for requester, got %v", err)
+	}
+
+	_, err = svc.GetAdminStats(ctx, domain.RoleAgent)
+	if !errors.Is(err, domain.ErrUnauthorizedTicket) {
+		t.Fatalf("expected ErrUnauthorizedTicket for agent, got %v", err)
+	}
+
+	stats, err := svc.GetAdminStats(ctx, domain.RoleAdmin)
+	if err != nil {
+		t.Fatalf("expected admin to access stats, got %v", err)
+	}
+	if stats == nil {
+		t.Fatalf("expected stats object")
+	}
 }

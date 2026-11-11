@@ -100,6 +100,7 @@ func main() {
 				admin.Use(middleware.RequireRoles(domain.RoleAdmin))
 				admin.Get("/users", userHandler.List)
 				admin.Patch("/users/{id}/role", userHandler.UpdateRole)
+				admin.Get("/admin/stats", ticketHandler.GetAdminStats)
 			})
 		})
 	})

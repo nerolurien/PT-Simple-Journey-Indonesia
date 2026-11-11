@@ -338,3 +338,19 @@ func (h *TicketHandler) DownloadAttachment(w http.ResponseWriter, r *http.Reques
 	http.ServeFile(w, r, filePath)
 }
 
+func (h *TicketHandler) GetAdminStats(w http.ResponseWriter, r *http.Request) {
+	role, ok := middleware.GetUserRole(r.Context())
+	if !ok || role != domain.RoleAdmin {
+		writeError(w, http.StatusForbidden, "hanya admin yang dapat mengakses statistik")
+		return
+	}
+
+	stats, err := h.ticketService.GetAdminStats(r.Context(), role)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "gagal memuat data statistik admin")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, stats)
+}
+

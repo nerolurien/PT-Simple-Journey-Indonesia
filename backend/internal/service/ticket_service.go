@@ -40,6 +40,7 @@ type TicketRepository interface {
 	CreateAttachment(ctx context.Context, att *domain.Attachment) (*domain.Attachment, error)
 	GetAttachmentByID(ctx context.Context, ticketID, attachmentID int64) (*domain.Attachment, error)
 	GetAttachmentsByTicketID(ctx context.Context, ticketID int64) ([]domain.Attachment, error)
+	GetAdminStats(ctx context.Context, slaUrgentHours int) (*domain.AdminStats, error)
 }
 
 type UserRepository interface {
@@ -481,5 +482,13 @@ func (s *TicketService) DownloadAttachment(ctx context.Context, currentUserID in
 	}
 
 	return att, fullPath, nil
+}
+
+func (s *TicketService) GetAdminStats(ctx context.Context, role domain.Role) (*domain.AdminStats, error) {
+	if role != domain.RoleAdmin {
+		return nil, domain.ErrUnauthorizedTicket
+	}
+
+	return s.ticketRepo.GetAdminStats(ctx, s.slaUrgentHours)
 }
 
