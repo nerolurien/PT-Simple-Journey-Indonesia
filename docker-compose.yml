@@ -36,11 +36,12 @@ services:
       CORS_ALLOWED_ORIGINS: "*"
       RATE_LIMIT_RPS: 10
       RATE_LIMIT_BURST: 20
+      SLA_URGENT_HOURS: 2
       STORAGE_DIR: /app/storage/attachments
     ports:
       - "8080:8080"
     volumes:
-      - backend_storage:/app/storage
+      - attachments_data:/app/storage/attachments
     depends_on:
       postgres:
         condition: service_healthy
@@ -60,4 +61,4 @@ services:
 
 volumes:
   postgres_data:
-  backend_storage:
+  attachments_data:

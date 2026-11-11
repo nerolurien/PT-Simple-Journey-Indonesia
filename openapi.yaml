@@ -166,6 +166,58 @@ components:
         uploader:
           $ref: '#/components/schemas/User'
 
+    AdminStats:
+      type: object
+      properties:
+        total_tickets:
+          type: integer
+          example: 24
+        status_breakdown:
+          type: array
+          items:
+            type: object
+            properties:
+              status:
+                type: string
+                example: open
+              count:
+                type: integer
+                example: 8
+        priority_breakdown:
+          type: array
+          items:
+            type: object
+            properties:
+              priority:
+                type: string
+                example: urgent
+              count:
+                type: integer
+                example: 3
+        sla_breached_count:
+          type: integer
+          example: 1
+        avg_resolution_hours:
+          type: number
+          example: 3.5
+        top_agents:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+                example: 2
+              name:
+                type: string
+                example: Nadia Putri
+              email:
+                type: string
+                example: agent@simplejourney.co.id
+              resolved_count:
+                type: integer
+                example: 12
+
     RegisterRequest:
       type: object
       required: [name, email, password]
@@ -808,48 +860,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  total_tickets:
-                    type: integer
-                    example: 24
-                  status_breakdown:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        status:
-                          type: string
-                        count:
-                          type: integer
-                  priority_breakdown:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        priority:
-                          type: string
-                        count:
-                          type: integer
-                  sla_breached_count:
-                    type: integer
-                    example: 1
-                  avg_resolution_hours:
-                    type: number
-                    example: 3.5
-                  top_agents:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        id:
-                          type: integer
-                        name:
-                          type: string
-                        email:
-                          type: string
-                        resolved_count:
-                          type: integer
+                $ref: '#/components/schemas/AdminStats'
         '401':
           description: Tidak terautentikasi
         '403':
