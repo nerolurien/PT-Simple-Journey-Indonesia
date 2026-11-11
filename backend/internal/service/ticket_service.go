@@ -491,4 +491,3 @@ func (s *TicketService) GetAdminStats(ctx context.Context, role domain.Role) (*d
 
 	return s.ticketRepo.GetAdminStats(ctx, s.slaUrgentHours)
 }
-

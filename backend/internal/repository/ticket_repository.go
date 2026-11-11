@@ -517,4 +517,3 @@ func (r *TicketRepository) GetAdminStats(ctx context.Context, slaUrgentHours int
 
 	return stats, nil
 }
-
