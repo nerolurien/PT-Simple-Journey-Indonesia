@@ -824,6 +824,33 @@ paths:
           description: Akses lampiran tidak diizinkan
         '404':
           description: Tiket atau lampiran tidak ditemukan
+    delete:
+      summary: Menghapus berkas lampiran tiket
+      description: Menghapus lampiran dari basis data dan menghapus berkas fisik dari storage. Hanya diizinkan untuk pengunggah berkas tersebut atau admin.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID tiket
+        - name: att_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID lampiran
+      responses:
+        '204':
+          description: Lampiran berhasil dihapus
+        '401':
+          description: Tidak terautentikasi
+        '403':
+          description: Hanya pengunggah atau admin yang dapat menghapus lampiran ini
+        '404':
+          description: Tiket atau lampiran tidak ditemukan
 
   /api/notifications/stream:
     get:

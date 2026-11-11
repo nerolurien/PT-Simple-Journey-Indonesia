@@ -40,6 +40,7 @@ type TicketRepository interface {
 	CreateAttachment(ctx context.Context, att *domain.Attachment) (*domain.Attachment, error)
 	GetAttachmentByID(ctx context.Context, ticketID, attachmentID int64) (*domain.Attachment, error)
 	GetAttachmentsByTicketID(ctx context.Context, ticketID int64) ([]domain.Attachment, error)
+	DeleteAttachment(ctx context.Context, ticketID, attachmentID int64) error
 	GetAdminStats(ctx context.Context, slaUrgentHours int) (*domain.AdminStats, error)
 }
 
@@ -482,6 +483,35 @@ func (s *TicketService) DownloadAttachment(ctx context.Context, currentUserID in
 	}
 
 	return att, fullPath, nil
+}
+
+func (s *TicketService) DeleteAttachment(ctx context.Context, currentUserID int64, role domain.Role, ticketID, attachmentID int64) error {
+	ticket, err := s.ticketRepo.GetByID(ctx, ticketID)
+	if err != nil {
+		return err
+	}
+
+	att, err := s.ticketRepo.GetAttachmentByID(ctx, ticketID, attachmentID)
+	if err != nil {
+		return err
+	}
+
+	if role != domain.RoleAdmin && att.UploaderID != currentUserID {
+		return domain.ErrUnauthorizedTicket
+	}
+
+	if role == domain.RoleRequester && ticket.RequesterID != currentUserID {
+		return domain.ErrUnauthorizedTicket
+	}
+
+	if err := s.ticketRepo.DeleteAttachment(ctx, ticketID, attachmentID); err != nil {
+		return err
+	}
+
+	fullPath := filepath.Clean(filepath.Join(s.storageDir, att.StoredName))
+	_ = os.Remove(fullPath)
+
+	return nil
 }
 
 func (s *TicketService) GetAdminStats(ctx context.Context, role domain.Role) (*domain.AdminStats, error) {

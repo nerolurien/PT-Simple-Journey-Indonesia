@@ -338,6 +338,44 @@ func (h *TicketHandler) DownloadAttachment(w http.ResponseWriter, r *http.Reques
 	http.ServeFile(w, r, filePath)
 }
 
+func (h *TicketHandler) DeleteAttachment(w http.ResponseWriter, r *http.Request) {
+	ticketID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "ID tiket tidak valid")
+		return
+	}
+
+	attachmentID, err := strconv.ParseInt(chi.URLParam(r, "att_id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "ID lampiran tidak valid")
+		return
+	}
+
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "autentikasi diperlukan")
+		return
+	}
+
+	role, _ := middleware.GetUserRole(r.Context())
+
+	err = h.ticketService.DeleteAttachment(r.Context(), userID, role, ticketID, attachmentID)
+	if err != nil {
+		if errors.Is(err, domain.ErrUnauthorizedTicket) {
+			writeError(w, http.StatusForbidden, "hanya pengunggah atau admin yang dapat menghapus lampiran ini")
+			return
+		}
+		if errors.Is(err, domain.ErrTicketNotFound) || errors.Is(err, domain.ErrAttachmentNotFound) {
+			writeError(w, http.StatusNotFound, "lampiran tidak ditemukan")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "gagal menghapus lampiran")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (h *TicketHandler) GetAdminStats(w http.ResponseWriter, r *http.Request) {
 	role, ok := middleware.GetUserRole(r.Context())
 	if !ok || role != domain.RoleAdmin {

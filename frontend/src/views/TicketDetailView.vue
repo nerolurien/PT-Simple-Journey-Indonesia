@@ -28,6 +28,7 @@ const uploading = ref(false)
 const uploadError = ref('')
 const uploadSuccess = ref('')
 const downloadingId = ref(null)
+const deletingId = ref(null)
 
 const assignableAgents = ref([])
 
@@ -105,6 +106,29 @@ async function downloadAttachment(att) {
     uploadError.value = 'Gagal mengunduh lampiran'
   } finally {
     downloadingId.value = null
+  }
+}
+
+function canDeleteAttachment(att) {
+  if (auth.isAdmin) return true
+  return att.uploader_id === auth.user?.id
+}
+
+async function handleDeleteAttachment(att) {
+  if (!confirm(`Apakah Anda yakin ingin menghapus lampiran "${att.original_name}"?`)) {
+    return
+  }
+  deletingId.value = att.id
+  uploadError.value = ''
+  uploadSuccess.value = ''
+  try {
+    await api.delete(`/tickets/${ticket.value.id}/attachments/${att.id}`)
+    ticket.value.attachments = ticket.value.attachments.filter((a) => a.id !== att.id)
+    uploadSuccess.value = `Lampiran "${att.original_name}" berhasil dihapus`
+  } catch (err) {
+    uploadError.value = err.response?.data?.error || 'Gagal menghapus lampiran'
+  } finally {
+    deletingId.value = null
   }
 }
 
@@ -449,8 +473,8 @@ onMounted(() => {
                     ({{ formatFileSize(att.size_bytes) }})
                   </span>
                 </div>
-                <div class="flex items-center space-x-3 shrink-0">
-                  <span class="text-[11px] text-zinc-400 hidden sm:inline">
+                <div class="flex items-center space-x-2 shrink-0">
+                  <span class="text-[11px] text-zinc-400 hidden sm:inline mr-1">
                     {{ formatDate(att.created_at) }}
                   </span>
                   <button
@@ -460,6 +484,15 @@ onMounted(() => {
                     class="px-2 py-1 border border-zinc-200 rounded text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
                   >
                     {{ downloadingId === att.id ? 'Mengunduh...' : 'Unduh' }}
+                  </button>
+                  <button
+                    v-if="canDeleteAttachment(att)"
+                    type="button"
+                    :disabled="deletingId === att.id"
+                    @click="handleDeleteAttachment(att)"
+                    class="px-2 py-1 border border-rose-200 rounded text-xs text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+                  >
+                    {{ deletingId === att.id ? 'Menghapus...' : 'Hapus' }}
                   </button>
                 </div>
               </div>

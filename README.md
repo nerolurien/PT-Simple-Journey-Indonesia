@@ -61,6 +61,7 @@ Dokumentasi lengkap skema request/response tersedia di openapi.yaml. Berikut rin
 | POST | /api/tickets/{id}/comments | Pemilik, Agent, Admin | Menambahkan komentar biasa atau catatan internal (is_internal) |
 | POST | /api/tickets/{id}/attachments | Pemilik, Agent, Admin | Mengunggah file lampiran pada tiket (maksimal 5MB) |
 | GET | /api/tickets/{id}/attachments/{att_id} | Pemilik, Agent, Admin | Mengunduh file lampiran tiket |
+| DELETE | /api/tickets/{id}/attachments/{att_id} | Pengunggah, Admin | Menghapus file lampiran tiket |
 | GET | /api/notifications/stream | Login | Koneksi Server-Sent Events (SSE) untuk notifikasi real-time |
 | GET | /api/users | Admin | Melihat daftar seluruh pengguna |
 | PATCH | /api/users/{id}/role | Admin | Mengubah peran pengguna (requester, agent, admin) |

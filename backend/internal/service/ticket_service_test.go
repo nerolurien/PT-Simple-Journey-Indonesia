@@ -96,6 +96,17 @@ func (m *inMemoryTicketRepo) GetAttachmentByID(ctx context.Context, ticketID, at
 	return nil, domain.ErrAttachmentNotFound
 }
 
+func (m *inMemoryTicketRepo) DeleteAttachment(ctx context.Context, ticketID, attachmentID int64) error {
+	list := m.attachments[ticketID]
+	for i, att := range list {
+		if att.ID == attachmentID {
+			m.attachments[ticketID] = append(list[:i], list[i+1:]...)
+			return nil
+		}
+	}
+	return domain.ErrAttachmentNotFound
+}
+
 func (m *inMemoryTicketRepo) GetAdminStats(ctx context.Context, slaUrgentHours int) (*domain.AdminStats, error) {
 	return &domain.AdminStats{
 		TotalTickets: int64(len(m.tickets)),
@@ -417,6 +428,19 @@ func TestAttachment_ValidationAndSecurity(t *testing.T) {
 		}
 		if _, err := os.Stat(dlPath); err != nil {
 			t.Errorf("expected downloaded file to exist on disk: %v", err)
+		}
+
+		err = svc.DeleteAttachment(ctx, requesterB, domain.RoleRequester, ticket.ID, att.ID)
+		if !errors.Is(err, domain.ErrUnauthorizedTicket) {
+			t.Errorf("expected ErrUnauthorizedTicket for non-owner delete, got %v", err)
+		}
+
+		err = svc.DeleteAttachment(ctx, requesterA, domain.RoleRequester, ticket.ID, att.ID)
+		if err != nil {
+			t.Fatalf("expected owner delete to succeed, got %v", err)
+		}
+		if _, err := os.Stat(dlPath); !os.IsNotExist(err) {
+			t.Errorf("expected file to be removed from disk after deletion, got %v", err)
 		}
 	})
 }

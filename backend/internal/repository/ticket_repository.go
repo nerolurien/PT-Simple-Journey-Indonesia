@@ -418,6 +418,18 @@ func (r *TicketRepository) GetAttachmentByID(ctx context.Context, ticketID, atta
 	return &a, nil
 }
 
+func (r *TicketRepository) DeleteAttachment(ctx context.Context, ticketID, attachmentID int64) error {
+	query := `DELETE FROM ticket_attachments WHERE id = $1 AND ticket_id = $2`
+	res, err := r.pool.Exec(ctx, query, attachmentID, ticketID)
+	if err != nil {
+		return fmt.Errorf("delete attachment: %w", err)
+	}
+	if res.RowsAffected() == 0 {
+		return domain.ErrAttachmentNotFound
+	}
+	return nil
+}
+
 func (r *TicketRepository) GetAdminStats(ctx context.Context, slaUrgentHours int) (*domain.AdminStats, error) {
 	if slaUrgentHours <= 0 {
 		slaUrgentHours = 2

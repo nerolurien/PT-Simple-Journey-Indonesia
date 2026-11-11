@@ -94,6 +94,7 @@ func main() {
 				tickets.Post("/{id}/comments", ticketHandler.AddComment)
 				tickets.Post("/{id}/attachments", ticketHandler.UploadAttachment)
 				tickets.Get("/{id}/attachments/{att_id}", ticketHandler.DownloadAttachment)
+				tickets.Delete("/{id}/attachments/{att_id}", ticketHandler.DeleteAttachment)
 			})
 
 			protected.Group(func(admin chi.Router) {
