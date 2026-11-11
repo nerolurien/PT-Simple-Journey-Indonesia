@@ -113,7 +113,7 @@ func (h *Hub) HandleStream(jwtSecret string) http.HandlerFunc {
 
 		claims := &middleware.Claims{}
 		token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (any, error) {
-			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			if t.Method.Alg() != jwt.SigningMethodHS256.Alg() {
 				return nil, errors.New("algoritma signing tidak valid")
 			}
 			return []byte(jwtSecret), nil

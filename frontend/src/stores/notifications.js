@@ -47,9 +47,7 @@ export const useNotificationStore = defineStore('notifications', () => {
     eventSource.addEventListener('ticket_status_updated', (e) => handleEvent('ticket_status_updated', e))
     eventSource.addEventListener('ticket_comment_added', (e) => handleEvent('ticket_comment_added', e))
 
-    eventSource.onerror = () => {
-      // EventSource handles auto reconnection
-    }
+    eventSource.onerror = () => {}
   }
 
   function disconnect() {

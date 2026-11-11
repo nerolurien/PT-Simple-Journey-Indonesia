@@ -139,7 +139,6 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Filter Bar -->
     <div class="mt-4 p-3 bg-white border border-zinc-200 rounded-lg">
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
         <div class="lg:col-span-2">
@@ -210,7 +209,6 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Error State -->
     <div
       v-if="error"
       class="mt-4 p-4 rounded-lg bg-rose-50 border border-rose-200 flex items-center justify-between"
@@ -225,13 +223,11 @@ onMounted(() => {
       </button>
     </div>
 
-    <!-- Loading State -->
     <div v-else-if="loading" class="mt-4 bg-white border border-zinc-200 rounded-lg p-8 text-center">
       <div class="inline-block w-5 h-5 border-2 border-zinc-300 border-t-zinc-900 rounded-full animate-spin"></div>
       <p class="mt-2 text-xs text-zinc-500">Memuat data tiket...</p>
     </div>
 
-    <!-- Empty State -->
     <div
       v-else-if="tickets.length === 0"
       class="mt-4 bg-white border border-zinc-200 rounded-lg p-12 text-center"
@@ -262,9 +258,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Data Table & Cards -->
     <div v-else class="mt-4 bg-white border border-zinc-200 rounded-lg overflow-hidden shadow-2xs">
-      <!-- Desktop Table -->
       <div class="hidden md:block overflow-x-auto">
         <table class="min-w-full divide-y divide-zinc-200 text-left text-xs">
           <thead class="bg-zinc-50 text-zinc-600 font-medium">
@@ -325,7 +319,6 @@ onMounted(() => {
         </table>
       </div>
 
-      <!-- Mobile Stacked Card List -->
       <div class="md:hidden divide-y divide-zinc-100">
         <div
           v-for="ticket in tickets"
@@ -359,7 +352,6 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- Pagination -->
       <PaginationBar
         :current-page="pagination.page"
         :total-pages="pagination.total_pages"

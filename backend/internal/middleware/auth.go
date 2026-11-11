@@ -42,7 +42,7 @@ func GenerateToken(secret string, userID int64, role domain.Role, ttl time.Durat
 
 func ValidateToken(secret, tokenString string) (*Claims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(t *jwt.Token) (interface{}, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+		if t.Method.Alg() != jwt.SigningMethodHS256.Alg() {
 			return nil, fmt.Errorf("metode signing token tidak valid: %v", t.Header["alg"])
 		}
 		return []byte(secret), nil

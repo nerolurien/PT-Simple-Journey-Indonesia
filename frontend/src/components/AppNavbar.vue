@@ -109,7 +109,6 @@ function handleLogout() {
         </div>
 
         <div class="flex items-center space-x-3">
-          <!-- Notification Bell & Dropdown -->
           <div class="relative" ref="notificationRef">
             <button
               type="button"
@@ -128,7 +127,6 @@ function handleLogout() {
               </span>
             </button>
 
-            <!-- Dropdown Menu -->
             <div
               v-if="showNotifications"
               class="absolute right-0 mt-2 w-80 sm:w-96 bg-white border border-zinc-200 rounded-lg shadow-lg z-50 overflow-hidden"

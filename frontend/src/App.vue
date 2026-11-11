@@ -36,7 +36,6 @@ function navigateFromToast(ticketId) {
       <router-view />
     </main>
 
-    <!-- Real-Time Toast Alert -->
     <div
       v-if="notifications.activeToast"
       class="fixed bottom-4 right-4 z-50 max-w-sm w-full bg-zinc-900 text-white rounded-lg shadow-lg border border-zinc-700 p-3.5 transition-all duration-200 cursor-pointer"

@@ -112,7 +112,6 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Feedback Banner -->
     <div
       v-if="feedbackMessage"
       class="mt-4 p-3 rounded-md text-xs flex items-center justify-between"
@@ -132,7 +131,6 @@ onMounted(() => {
       </button>
     </div>
 
-    <!-- Search Bar -->
     <div class="mt-4 p-3 bg-white border border-zinc-200 rounded-lg">
       <div class="max-w-md">
         <label for="searchUsers" class="sr-only">Cari pengguna</label>
@@ -146,7 +144,6 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Error State -->
     <div
       v-if="error"
       class="mt-4 p-4 rounded-lg bg-rose-50 border border-rose-200 flex items-center justify-between"
@@ -161,13 +158,11 @@ onMounted(() => {
       </button>
     </div>
 
-    <!-- Loading State -->
     <div v-else-if="loading" class="mt-4 bg-white border border-zinc-200 rounded-lg p-8 text-center">
       <div class="inline-block w-5 h-5 border-2 border-zinc-300 border-t-zinc-900 rounded-full animate-spin"></div>
       <p class="mt-2 text-xs text-zinc-500">Memuat daftar pengguna...</p>
     </div>
 
-    <!-- Users Table -->
     <div v-else class="mt-4 bg-white border border-zinc-200 rounded-lg overflow-hidden shadow-2xs">
       <div class="overflow-x-auto">
         <table class="min-w-full divide-y divide-zinc-200 text-left text-xs">

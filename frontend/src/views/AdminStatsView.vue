@@ -82,7 +82,6 @@ onMounted(() => {
     </div>
 
     <div v-else-if="stats" class="space-y-6">
-      <!-- Metric Cards -->
       <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <div class="p-4 bg-white border border-zinc-200 rounded-lg">
           <p class="text-xs font-medium text-zinc-500">Total Tiket</p>
@@ -123,9 +122,7 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- Distribution Charts -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <!-- Status Distribution -->
         <div class="p-5 bg-white border border-zinc-200 rounded-lg">
           <h2 class="text-sm font-semibold text-zinc-900 mb-4">Distribusi Status Tiket</h2>
           <div class="space-y-3">
@@ -145,7 +142,6 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- Priority Distribution -->
         <div class="p-5 bg-white border border-zinc-200 rounded-lg">
           <h2 class="text-sm font-semibold text-zinc-900 mb-4">Distribusi Prioritas</h2>
           <div class="space-y-3">
@@ -166,7 +162,6 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- Agent Workload / Leaderboard -->
       <div class="bg-white border border-zinc-200 rounded-lg overflow-hidden">
         <div class="px-5 py-4 border-b border-zinc-200">
           <h2 class="text-sm font-semibold text-zinc-900">Performa Penyelesaian Agen</h2>

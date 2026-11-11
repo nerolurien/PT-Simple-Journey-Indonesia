@@ -150,7 +150,6 @@ async function loadAgents() {
         (u) => u.role === 'agent' || u.role === 'admin'
       )
     } catch {
-      // Ignored if failed
     }
   }
 }
@@ -325,7 +324,6 @@ onMounted(() => {
       </RouterLink>
     </div>
 
-    <!-- Error State -->
     <div
       v-if="error"
       class="p-6 bg-white border border-rose-200 rounded-lg text-center"
@@ -341,15 +339,12 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Loading State -->
     <div v-else-if="loading" class="p-12 bg-white border border-zinc-200 rounded-lg text-center">
       <div class="inline-block w-5 h-5 border-2 border-zinc-300 border-t-zinc-900 rounded-full animate-spin"></div>
       <p class="mt-2 text-xs text-zinc-500">Memuat detail tiket...</p>
     </div>
 
-    <!-- Main Detail View -->
     <div v-else-if="ticket" class="space-y-6">
-      <!-- Header Banner -->
       <div class="bg-white border border-zinc-200 rounded-lg p-5 shadow-2xs">
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
@@ -374,7 +369,6 @@ onMounted(() => {
             </p>
           </div>
 
-          <!-- Dynamic Status Transition Buttons -->
           <div class="flex flex-wrap items-center gap-2">
             <button
               v-for="btn in availableTransitions"
@@ -395,11 +389,8 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- Two-column Body -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <!-- Left: Ticket Description & Comments -->
         <div class="lg:col-span-2 space-y-6">
-          <!-- Description Card -->
           <div class="bg-white border border-zinc-200 rounded-lg p-5 shadow-2xs">
             <h2 class="text-xs font-semibold text-zinc-800 uppercase tracking-wider mb-3">
               Deskripsi Kendala
@@ -409,7 +400,6 @@ onMounted(() => {
             </div>
           </div>
 
-          <!-- Attachments Section -->
           <div class="bg-white border border-zinc-200 rounded-lg p-5 shadow-2xs">
             <div class="flex items-center justify-between mb-4">
               <h2 class="text-xs font-semibold text-zinc-800 uppercase tracking-wider">
@@ -476,13 +466,11 @@ onMounted(() => {
             </div>
           </div>
 
-          <!-- Comments Section -->
           <div class="bg-white border border-zinc-200 rounded-lg p-5 shadow-2xs">
             <h2 class="text-xs font-semibold text-zinc-800 uppercase tracking-wider mb-4">
               Aktivitas & Komentar ({{ ticket.comments?.length || 0 }})
             </h2>
 
-            <!-- Comment List -->
             <div v-if="ticket.comments?.length === 0" class="text-center py-6 text-xs text-zinc-500">
               Belum ada komentar pada tiket ini.
             </div>
@@ -515,7 +503,6 @@ onMounted(() => {
               </div>
             </div>
 
-            <!-- Comment Form -->
             <div class="pt-4 border-t border-zinc-200">
               <h3 class="text-xs font-medium text-zinc-900 mb-2">Tulis Komentar</h3>
 
@@ -560,9 +547,7 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- Right: Meta & Agent Controls -->
         <div class="space-y-6">
-          <!-- Meta Card -->
           <div class="bg-white border border-zinc-200 rounded-lg p-5 shadow-2xs space-y-3.5">
             <h2 class="text-xs font-semibold text-zinc-800 uppercase tracking-wider pb-2 border-b border-zinc-100">
               Informasi Tiket
@@ -598,7 +583,6 @@ onMounted(() => {
             </div>
           </div>
 
-          <!-- Agent / Admin Quick Controls -->
           <div
             v-if="isAdminOrAgent"
             class="bg-white border border-zinc-200 rounded-lg p-5 shadow-2xs space-y-4"
@@ -630,7 +614,6 @@ onMounted(() => {
                 Tugaskan Teknisi
               </label>
 
-              <!-- Admin Select Dropdown -->
               <div v-if="auth.isAdmin && assignableAgents.length > 0" class="space-y-2">
                 <select
                   id="updateAssignee"
@@ -646,7 +629,6 @@ onMounted(() => {
                 </select>
               </div>
 
-              <!-- Quick Self-Assign & Unassign Buttons for Agents/Admins -->
               <div class="mt-2 flex flex-col space-y-1.5">
                 <button
                   v-if="ticket.assignee_id !== auth.user.id"
