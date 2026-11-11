@@ -12,10 +12,22 @@ export const useNotificationStore = defineStore('notifications', () => {
   })
 
   function connect(token) {
-    if (!token || eventSource) return
+    if (!token) return
 
-    const baseURL = import.meta.env.VITE_API_URL || '/api'
-    const streamURL = `${baseURL}/notifications/stream?token=${encodeURIComponent(token)}`
+    if (eventSource) {
+      eventSource.close()
+      eventSource = null
+    }
+
+    const rawBase = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL
+    let streamURL = ''
+    if (rawBase) {
+      streamURL = `${rawBase.replace(/\/+$/, '')}/notifications/stream?token=${encodeURIComponent(token)}`
+    } else if (window.location.port === '5173') {
+      streamURL = `http://localhost:8080/api/notifications/stream?token=${encodeURIComponent(token)}`
+    } else {
+      streamURL = `/api/notifications/stream?token=${encodeURIComponent(token)}`
+    }
 
     eventSource = new EventSource(streamURL)
 
