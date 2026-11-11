@@ -1,158 +1,102 @@
-# Simple Journey Helpdesk Monorepo
+# Internal Helpdesk Ticketing System
 
-Sistem helpdesk tiket internal untuk operasional PT Simple Journey Indonesia. Repositori ini dibangun dalam arsitektur monorepo yang terdiri dari backend berbasis Go dan antarmuka web berbasis Vue 3.
-
-## Kebutuhan Sistem
-
-- Docker dan Docker Compose (metode deployment utama), ATAU
-- Go 1.22+
-- Node.js 20+
-- PostgreSQL 16
+Repositori ini berisi pengerjaan technical test Shift Engineer - Fullstack untuk PT Simple Journey Indonesia. Aplikasi dibangun dalam satu monorepo yang terdiri dari backend REST API menggunakan Go, antarmuka web menggunakan Vue 3, dan database PostgreSQL.
 
 ## Cara Menjalankan Aplikasi
 
-### 1. Menjalankan Menggunakan Docker Compose (Rekomendasi)
-
-Cukup jalankan satu perintah berikut di direktori root proyek:
+### 1. Menggunakan Docker Compose (Direkomendasikan)
+Pastikan Docker dan Docker Compose sudah berjalan di mesin lokal. Jalankan perintah berikut dari root direktori:
 
 ```bash
 docker compose up --build
 ```
 
-Perintah ini akan secara otomatis:
-1. Menjalankan container PostgreSQL 16 dan menunggu status healthcheck siap.
-2. Membangun dan menjalankan backend Go, mengeksekusi migrasi skema tabel secara idempoten, memverifikasi data seeder awal, serta menyiapkan volume penyimpanan lampiran (`attachments_data`).
-3. Membangun frontend Vue 3 dan menyajikannya via reverse proxy Nginx pada port 80 dan port 5173 dengan konfigurasi streaming SSE (`proxy_buffering off`) serta batas payload berkas (`client_max_body_size 6M`).
+Saat container backend pertama kali menyala, sistem akan otomatis menjalankan migrasi tabel dan mengisi data awal (seed data).
+- Frontend (Web UI): http://localhost atau http://localhost:5173 (diatur pada docker-compose.yml)
+- Backend REST API: http://localhost:8080
+- Spesifikasi OpenAPI: tersedia di file openapi.yaml pada root repositori.
 
-Akses aplikasi pada browser:
-- Frontend: `http://localhost` atau `http://localhost:5173`
-- Backend API langsung: `http://localhost:8080`
-- Dokumentasi OpenAPI: file `openapi.yaml` pada root repositori
+### 2. Menjalankan Secara Lokal (Tanpa Docker)
 
-### 2. Menjalankan Secara Manual (Development Lokal)
-
-Jika ingin menjalankan tanpa Docker:
-
-1. Buat database PostgreSQL bernama `simple_journey_helpdesk`.
-2. Salin `.env.example` menjadi `.env` di root atau atur environment variable:
-   ```bash
-   cp .env.example .env
-   ```
-3. Jalankan backend:
-   ```bash
-   cd backend
-   go run ./cmd/api
-   ```
-   (Skema database dan seeder data awal akan otomatis dieksekusi saat backend pertama kali dijalankan).
-4. Jalankan frontend:
-   ```bash
-   cd frontend
-   npm install
-   npm run dev
-   ```
-   Buka `http://localhost:5173` pada browser.
-
-## Akun Pengguna Awal (Seed Data)
-
-Database secara otomatis diisi dengan akun pengguna awal untuk masing-masing peran operasional:
-
-| Peran | Nama Lengkap | Email | Password | Hak Akses Utama |
-| --- | --- | --- | --- | --- |
-| Admin | Budi Santoso | admin@simplejourney.co.id | Password123! | Mengelola semua tiket, mengubah role pengguna, menutup tiket dari status open, melihat statistik sistem |
-| Agent | Nadia Putri | agent@simplejourney.co.id | Password123! | Menangani tiket, mengubah status (in_progress, resolved), membuat catatan internal |
-| Agent | Rizky Pratama | rizky.pratama@simplejourney.co.id | Password123! | Menangani tiket operasional |
-| Requester | Siti Rahmawati | requester@simplejourney.co.id | Password123! | Membuat tiket, mengunggah lampiran, melihat tiket miliknya sendiri, membatalkan/menutup tiket miliknya |
-| Requester | Dewi Lestari | dewi.lestari@simplejourney.co.id | Password123! | Akun pemohon kedua (untuk validasi IDOR) |
-
-Catatan: Pada halaman login, tersedia tombol pintas untuk mengisi kredensial seed secara instan.
-
-## Ringkasan Endpoint API
-
-Spesifikasi lengkap tersedia dalam format OpenAPI 3.0 pada file `openapi.yaml`.
-
-### Autentikasi & Pengguna
-- `POST /api/auth/register` - Pendaftaran akun pemohon baru (role default: requester).
-- `POST /api/auth/login` - Autentikasi dan penerbitan token JWT HS256.
-- `GET /api/me` - Informasi profil pengguna yang sedang login.
-- `GET /api/users` - Daftar seluruh pengguna (Khusus Admin).
-- `PATCH /api/users/{id}/role` - Pembaruan peran pengguna (Khusus Admin, tidak dapat mengubah role akun sendiri).
-
-### Tiket, Komentar & Lampiran
-- `POST /api/tickets` - Pembuatan tiket bantuan baru (Status awal: open).
-- `GET /api/tickets` - Daftar tiket dengan filter status, prioritas, pencarian judul (`q`), sorting whitelist, dan pagination. Otomatis dibatasi ke tiket milik sendiri jika requester.
-- `GET /api/tickets/{id}` - Detail tiket, riwayat komentar, dan daftar lampiran berkas. Catatan internal otomatis disaring untuk requester.
-- `PATCH /api/tickets/{id}` - Pembaruan status (sesuai matriks transisi), prioritas, atau penugasan teknisi.
-- `POST /api/tickets/{id}/comments` - Penambahan komentar publik atau catatan internal (catatan internal hanya diizinkan untuk agent/admin).
-- `POST /api/tickets/{id}/attachments` - Unggah berkas lampiran pada tiket (batas 5 MB, validasi tipe file ganda).
-- `GET /api/tickets/{id}/attachments/{att_id}` - Unduh berkas lampiran dengan autentikasi dan proteksi IDOR.
-
-### Notifikasi & Statistik (Fitur Tambahan)
-- `GET /api/notifications/stream` - Stream notifikasi real-time via Server-Sent Events (SSE). Mendukung token query param atau Bearer header.
-- `GET /api/admin/stats` - Agregasi metrik helpdesk, distribusi prioritas/status, SLA breach, dan leaderboard agen (Khusus Admin).
-
-## Pengujian & Pengecekan Kualitas Kode
-
-### 1. Backend Testing & Linting
-Seluruh pengujian backend ditulis menggunakan package standar `testing` Go tanpa memerlukan database eksternal yang aktif:
-
+Backend:
+1. Buat database PostgreSQL baru dan salin .env.example menjadi .env, lalu sesuaikan koneksi database.
+2. Masuk ke folder backend dan jalankan server:
 ```bash
 cd backend
-gofmt -s -l .
-go vet ./...
-go test ./... -v
+go mod download
+go run ./cmd/api/main.go
 ```
 
-Pengujian mencakup:
-1. Validasi alur transisi status yang sah untuk tiap peran.
-2. Penolakan transisi status ilegal (422) dan pelanggaran hak peran (403).
-3. Proteksi IDOR dan kontrol akses kepemilikan tiket.
-4. Penapisan catatan internal agar tidak bocor ke role requester.
-5. Proteksi pembaruan peran dan pencegahan admin mengubah role sendiri.
-6. Pengecekan strict algoritma JWT dan token-bucket rate limiter.
-7. Perhitungan SLA breach untuk tiket urgent yang belum ditangani vs tiket non-urgent.
-8. Keamanan upload berkas: penolakan ekstensi terlarang (.exe, .sh, .html, .svg), penolakan MIME terselubung, penolakan file melebihi batas 5 MB, serta proteksi IDOR pada unduhan lampiran.
-
-### 2. Frontend Linting & Build
-Frontend menggunakan ESLint dan Vite untuk memastikan kualitas kode dan keberhasilan build:
-
+Frontend:
+1. Masuk ke folder frontend dan instal dependensi:
 ```bash
 cd frontend
-npm run lint
-npm run build
+npm install
+npm run dev
 ```
 
-### 3. Pipeline CI (Continuous Integration)
-Repositori dilengkapi dengan otomatisasi GitHub Actions pada file `.github/workflows/ci.yml` yang berjalan pada setiap event `push` dan `pull_request` ke branch `main`:
-- **Job `backend-lint-and-test`:** Memeriksa format kode (`gofmt`), analisis statis (`go vet`), serta menjalankan seluruh unit test dengan race detector (`go test -v -race ./...`) di lingkungan Ubuntu dengan layanan PostgreSQL 16.
-- **Job `frontend-lint-and-build`:** Memeriksa aturan penulisan kode (`npm run lint` via ESLint) dan memvalidasi keberhasilan kompilasi aset produksi (`npm run build`).
+## Akun Seed (Data Awal)
+Migrasi awal sudah menyertakan akun untuk masing-masing peran agar alur aplikasi bisa langsung diuji:
 
----
+| Peran | Email | Password | Hak Akses Utama |
+| --- | --- | --- | --- |
+| Admin | admin@simplejourney.co.id | Password123! | Semua akses Agent + kelola pengguna, ubah role, dan lihat statistik |
+| Agent | agent@simplejourney.co.id | Password123! | Lihat semua tiket, assign tiket, ubah status/prioritas, buat catatan internal |
+| Requester | requester@simplejourney.co.id | Password123! | Buat tiket, lihat & komentar di tiket milik sendiri, batalkan/reopen tiket sendiri |
+
+(Catatan: Jika terdapat akun requester kedua di seeder untuk pengujian isolasi akses/IDOR, gunakan kredensial yang tertera pada file seeder).
+
+## Daftar Endpoint API
+Dokumentasi lengkap skema request/response tersedia di openapi.yaml. Berikut ringkasan endpoint yang tersedia:
+
+| Method | Path | Akses | Keterangan |
+| --- | --- | --- | --- |
+| POST | /api/auth/register | Publik | Registrasi akun baru (otomatis berperan sebagai requester) |
+| POST | /api/auth/login | Publik | Login dan mendapatkan token JWT |
+| GET | /api/me | Login | Mengambil profil pengguna yang sedang aktif |
+| GET | /api/tickets | Login | Daftar tiket (mendukung pagination, filter status/prioritas/assignee, cari judul, sort) |
+| POST | /api/tickets | Login | Membuat tiket bantuan baru |
+| GET | /api/tickets/{id} | Pemilik, Agent, Admin | Detail tiket beserta daftar komentar dan lampiran |
+| PATCH | /api/tickets/{id} | Sesuai aturan transisi | Mengubah status tiket, prioritas, atau agen yang menangani |
+| POST | /api/tickets/{id}/comments | Pemilik, Agent, Admin | Menambahkan komentar biasa atau catatan internal (is_internal) |
+| POST | /api/tickets/{id}/attachments | Pemilik, Agent, Admin | Mengunggah file lampiran pada tiket (maksimal 5MB) |
+| GET | /api/tickets/{id}/attachments/{att_id} | Pemilik, Agent, Admin | Mengunduh file lampiran tiket |
+| GET | /api/notifications/stream | Login | Koneksi Server-Sent Events (SSE) untuk notifikasi real-time |
+| GET | /api/users | Admin | Melihat daftar seluruh pengguna |
+| PATCH | /api/users/{id}/role | Admin | Mengubah peran pengguna (requester, agent, admin) |
+| GET | /api/admin/stats | Admin | Ringkasan metrik tiket, beban kerja agen, dan kepatuhan SLA |
+
+## Menjalankan Pengujian (Test)
+Pengujian di sisi backend mencakup validasi matriks transisi status tiket, pembatasan akses antar peran (RBAC & pencegahan IDOR), pemisahan catatan internal agar tidak bocor ke requester, serta perhitungan SLA.
+
+Untuk menjalankan seluruh test:
+```bash
+cd backend
+go test -v ./...
+```
 
 ## Catatan Arsitektur & Keputusan Teknis
 
-### 1. Struktur Kode Berlapis dan Pemilihan Database
-Untuk backend, saya menyusun struktur kode ke dalam lapisan yang memiliki tanggung jawab tunggal: `cmd/` untuk entrypoint eksekusi, `internal/domain` untuk entitas inti dan logika bisnis murni, `internal/repository` untuk interaksi basis data terparameterisasi, `internal/service` untuk orkestrasi use-case dan aturan akses, serta `internal/handler` dan `internal/middleware` untuk penanganan HTTP.
+### 1. Keputusan Arsitektur & Struktur Kode
+Pada sisi backend, saya memisahkan kode ke dalam empat lapisan utama: domain (model dan aturan bisnis murni), repository (query database), service (orkestrasi logika bisnis dan kontrol akses), serta handler (transport HTTP dan validasi input). Pendekatan ini saya pilih agar aturan krusial seperti matriks perpindahan status tiket dapat diuji langsung lewat unit test tanpa harus menyalakan server HTTP maupun database.
 
-Saya menggunakan PostgreSQL 16 bersama library `pgx/v5` dan `pgxpool`. PostgreSQL dipilih karena integritas relasionalnya yang ketat melalui foreign key constraints (`ON DELETE RESTRICT` dan `ON DELETE CASCADE`), index performa, serta konsistensi transaksi ACID yang penting untuk status tiket bantuan.
+Untuk database, saya menggunakan PostgreSQL dengan query SQL eksplisit (tanpa ORM berat) supaya query filter kombinasi, pencarian ILIKE, dan pagination pada daftar tiket lebih mudah dikontrol performanya. Kolom pengurutan (sort_by dan order) divalidasi menggunakan daftar putih (whitelist map) di level repository untuk menutup celah SQL Injection pada klausa ORDER BY.
 
-### 2. Implementasi Keamanan, Validasi Status & Fitur Tambahan
-- **Matriks Transisi Status:** Logika transisi tiket dipusatkan pada fungsi `ValidateStatusTransition` di domain layer. Saya membedakan secara tegas antara transisi yang secara state machine memang tidak valid (dikembalikan sebagai HTTP 422 Unprocessable Entity) dan transisi yang secara alur ada namun pengguna tidak berhak melakukannya (dikembalikan sebagai HTTP 403 Forbidden).
-- **Pencegahan IDOR (Insecure Direct Object References):** Pada level service, jika pengguna ber-role `requester`, query pencarian daftar tiket secara paksa menambahkan filter `requester_id = current_user_id`. Saat mengambil detail tiket, mengunggah lampiran, atau mengunduh berkas, kepemilikan tiket divalidasi terlebih dahulu sebelum operasi dijalankan.
-- **Pembersihan Catatan Internal (OWASP A01):** Catatan internal (`is_internal = true`) tidak disembunyikan menggunakan manipulasi CSS di frontend, melainkan disaring langsung pada service layer Go sebelum data dienkode ke JSON. Dengan demikian, data internal tidak pernah keluar melalui jaringan ke klien pemohon.
-- **Pencegahan SQL Injection pada Sorting:** Kolom pengurutan data tiket diperiksa terhadap whitelist map (`created_at`, `updated_at`, `priority`). Jika nilai input tidak cocok, sistem otomatis menggunakan default `t.created_at DESC` tanpa melakukan interpolasi string mentah ke dalam query SQL.
-- **Keamanan Unggah Berkas (OWASP File Upload Security):** Untuk fitur bonus lampiran berkas, saya menerapkan validasi lapis ganda: whitelist ekstensi (`.png`, `.jpg`, `.jpeg`, `.pdf`, `.txt`, `.log`) dikombinasikan dengan magic-byte sniffing melalui `http.DetectContentType` pada 512 byte pertama (menolak executable dan script terselubung seperti file HTML yang disamarkan). Batas ukuran 5 MB ditegakkan via `http.MaxBytesReader`. Untuk mencegah path traversal, file disimpan dengan nama acak UUID pada direktori non-publik (`./storage/attachments`) dengan permission ketat, disajikan dengan header `Content-Disposition: attachment` serta `X-Content-Type-Options: nosniff`, dan didukung volume Docker khusus (`attachments_data`).
-- **Aturan SLA Tiket Urgent:** Tiket berprioritas `urgent` yang masih berstatus `open` melebihi ambang batas (`SLA_URGENT_HOURS`, default 2 jam) otomatis ditandai sebagai `is_sla_breached = true` dan memunculkan badge indikator merah "Terlambat (SLA)" pada antarmuka. Saat tiket berpindah ke `in_progress`, timestamp `first_responded_at` dicatat sebagai bukti audit waktu respon awal.
-- **Notifikasi Real-Time via Server-Sent Events (SSE):** Hub in-memory berbasis channels dan `sync.RWMutex` menyiarkan event tiket secara aman ke pengguna yang sedang online. Agen & Admin menerima alert tiket baru, sedangkan pemohon menerima update status dan komentar balasan secara langsung. Catatan internal secara ketat tidak memicu notifikasi ke akun pemohon. Pada sisi reverse proxy Nginx, buffering dinonaktifkan (`proxy_buffering off`) untuk menjamin pesan diterima instan.
-- **Halaman Statistik Admin:** Dashboard analitik metrik tiket, visualisasi distribusi status & prioritas murni CSS, penghitungan tiket terlambat SLA, durasi rata-rata penyelesaian penanganan, dan leaderboard performa agen.
-- **Otomatisasi CI (Continuous Integration):** Pipeline GitHub Actions terintegrasi untuk menjalankan linting Go dan frontend secara otomatis pada setiap pull request dan push ke branch utama.
+Di sisi keamanan akses:
+- **Validasi Kepemilikan (Anti-IDOR)**: Pengguna dengan peran requester dikunci di level query dan service agar hanya bisa membaca, mengomentari, dan mengunduh lampiran dari tiket yang requester_id-nya sesuai dengan ID di token JWT mereka.
+- **Catatan Internal (is_internal)**: Saat requester mengambil detail tiket (GET /api/tickets/{id}), komentar dengan flag is_internal = true langsung difilter di sisi backend sebelum diserialisasi ke JSON, bukan sekadar disembunyikan di tampilan Vue.
+- **Validasi Lampiran File**: Upload file dibatasi maksimal 5MB menggunakan http.MaxBytesReader dan divalidasi tipe kontennya menggunakan pembacaan magic bytes (http.DetectContentType), kemudian disimpan dengan nama UUID acak di luar folder publik untuk mencegah eksekusi script maupun path traversal.
+- **Notifikasi Real-Time & SLA**: Untuk fitur notifikasi real-time, saya memilih Server-Sent Events (SSE) dibanding WebSocket karena arah komunikasinya satu arah (dari server ke klien saat ada pembaruan tiket/komentar), sehingga jauh lebih ringan dan otomatis berjalan di atas koneksi HTTP standar. Aturan SLA untuk tiket urgent dihitung berdasarkan selisih waktu sejak tiket dibuat (created_at) jika statusnya masih open melewati batas waktu yang ditentukan (default 2 jam).
 
-### 3. Kompromi Teknis Berdasarkan Batasan Waktu
-Dalam batas waktu pengerjaan tugas teknis ini, saya mengambil beberapa keputusan penyederhanaan:
-- **Rate Limiter & SSE Hub In-Memory:** Rate limiter token bucket dan SSE Hub diimplementasikan secara in-memory per alamat instance dengan goroutine pembersih data usang berkala. Pendekatan ini menghindari ketergantungan Redis untuk deployment satu instance, namun siap dipindahkan ke Redis Pub/Sub jika aplikasi di-deploy secara multi-node.
-- **Penyimpanan Berkas Lokal Terisolasi:** Berkas lampiran disimpan pada volume direktori lokal terisolasi dalam container Docker (`attachments_data`). Pada skala enterprise, ini dapat dialihkan ke layanan Object Storage S3 yang kompatibel.
+### 2. Hal yang Sengaja Disederhanakan (Trade-off)
+Karena batasan waktu pengerjaan take-home test, beberapa komponen saya buat sesederhana mungkin selama fungsionalitas utamanya terpenuhi:
+- **Penyimpanan File Lokal**: File lampiran tiket masih disimpan di dalam local disk / Docker volume pada container backend, belum dipisahkan ke layanan object storage eksternal.
+- **In-Memory SSE Hub & Rate Limiter**: Pengelolaan koneksi aktif SSE dan pembatasan request (rate limiting) pada endpoint autentikasi masih disimpan di memori aplikasi Go (sync.RWMutex). Ini sudah cukup untuk berjalan di satu container, namun state-nya tidak terbagi jika backend dijalankan lebih dari satu instance (horizontal scaling).
+- **Manajemen Sesi JWT**: Autentikasi menggunakan satu stateless JWT dengan masa berlaku terbatas tanpa mekanisme tabel refresh token / pencabutan token (token revocation) di database.
 
-### 4. Rencana Pengembangan Lanjutan
-Apabila diberikan waktu pengembangan lebih lanjut, perbaikan yang akan saya prioritaskan adalah:
-1. **SLA Escalation Worker:** Membuat background worker terjadwal untuk mengirimkan notifikasi eskalasi otomatis ke email manager jika tiket berstatus urgent belum ditangani menjelang batas SLA.
-2. **Object Storage Integration:** Integrasi penyimpanan berkas ke AWS S3 atau MinIO menggunakan mekanisme presigned URL.
-3. **Multi-Instance SSE Pub/Sub:** Menghubungkan SSE Hub dengan Redis Pub/Sub untuk sinkronisasi notifikasi real-time lintas replika container horizontal.
+### 3. Perbaikan Jika Ada Waktu Lebih
+Jika proyek ini diteruskan ke lingkungan produksi, beberapa hal yang akan saya tambahkan adalah:
+- Memindahkan penyimpanan lampiran ke S3-compatible storage (seperti AWS S3 atau MinIO) menggunakan mekanisme presigned URL agar beban I/O file tidak membebani server API.
+- Mengintegrasikan Redis untuk kebutuhan Pub/Sub pada SSE (agar notifikasi tetap sinkron di banyak instance backend) serta untuk menyimpan counter rate limiter.
+- Menambahkan background worker terjadwal untuk mengirimkan pengingat otomatis ke agen sebelum batas waktu SLA tiket urgent terlewati, bukan hanya menandai status terlambat saat data tiket diambil.
+- Menambahkan riwayat audit (audit log) terpisah yang mencatat setiap perubahan status, prioritas, dan perpindahan assignee pada tiket.
