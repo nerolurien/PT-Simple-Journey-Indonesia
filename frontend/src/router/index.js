@@ -43,6 +43,12 @@ const routes = [
     meta: { requiresAuth: true, requiresAdmin: true }
   },
   {
+    path: '/admin/stats',
+    name: 'admin-stats',
+    component: () => import('@/views/AdminStatsView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
     path: '/:pathMatch(.*)*',
     redirect: '/tickets'
   }

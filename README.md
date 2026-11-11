@@ -86,6 +86,10 @@ Spesifikasi lengkap tersedia dalam format OpenAPI 3.0 pada file `openapi.yaml`.
 - `POST /api/tickets/{id}/attachments` - Unggah berkas lampiran pada tiket (batas 5 MB, validasi tipe file ganda).
 - `GET /api/tickets/{id}/attachments/{att_id}` - Unduh berkas lampiran dengan autentikasi dan proteksi IDOR.
 
+### Notifikasi & Statistik (Fitur Tambahan)
+- `GET /api/notifications/stream` - Stream notifikasi real-time via Server-Sent Events (SSE). Mendukung token query param atau Bearer header.
+- `GET /api/admin/stats` - Agregasi metrik helpdesk, distribusi prioritas/status, SLA breach, dan leaderboard agen (Khusus Admin).
+
 ## Menjalankan Unit & Integration Test
 
 Seluruh pengujian backend ditulis menggunakan package standar `testing` Go tanpa memerlukan database eksternal yang aktif:
@@ -121,14 +125,16 @@ Saya menggunakan PostgreSQL 16 bersama library `pgx/v5` dan `pgxpool`. PostgreSQ
 - **Pencegahan SQL Injection pada Sorting:** Kolom pengurutan data tiket diperiksa terhadap whitelist map (`created_at`, `updated_at`, `priority`). Jika nilai input tidak cocok, sistem otomatis menggunakan default `t.created_at DESC` tanpa melakukan interpolasi string mentah ke dalam query SQL.
 - **Keamanan Unggah Berkas (OWASP File Upload Security):** Untuk fitur bonus lampiran berkas, saya menerapkan validasi lapis ganda: whitelist ekstensi (`.png`, `.jpg`, `.jpeg`, `.pdf`, `.txt`, `.log`) dikombinasikan dengan magic-byte sniffing melalui `http.DetectContentType` pada 512 byte pertama (menolak executable dan script terselubung seperti file HTML yang disamarkan). Batas ukuran 5 MB ditegakkan via `http.MaxBytesReader`. Untuk mencegah path traversal, file disimpan dengan nama acak UUID pada direktori non-publik (`./storage/attachments`) dengan permission ketat, dan disajikan dengan header `Content-Disposition: attachment` serta `X-Content-Type-Options: nosniff`.
 - **Aturan SLA Tiket Urgent:** Tiket berprioritas `urgent` yang masih berstatus `open` melebihi ambang batas (`SLA_URGENT_HOURS`, default 2 jam) otomatis ditandai sebagai `is_sla_breached = true` dan memunculkan badge indikator merah "Terlambat (SLA)" pada antarmuka. Saat tiket berpindah ke `in_progress`, timestamp `first_responded_at` dicatat sebagai bukti audit waktu respon awal.
+- **Notifikasi Real-Time via Server-Sent Events (SSE):** Hub in-memory berbasis channels dan `sync.RWMutex` menyiarkan event tiket secara aman ke pengguna yang sedang online. Agen & Admin menerima alert tiket baru, sedangkan pemohon menerima update status dan komentar balasan secara langsung. Catatan internal secara ketat tidak memicu notifikasi ke akun pemohon.
+- **Halaman Statistik Admin:** Dashboard analitik metrik tiket, visualisasi distribusi status & prioritas murni CSS, penghitungan tiket terlambat SLA, durasi rata-rata penyelesaian penanganan, dan leaderboard agen teratas.
 
 ### 3. Kompromi Teknis Berdasarkan Batasan Waktu
 Dalam batas waktu pengerjaan tugas teknis ini, saya mengambil beberapa keputusan penyederhanaan:
-- **Rate Limiter In-Memory:** Rate limiter untuk proteksi endpoint login/registrasi diimplementasikan menggunakan algoritma token bucket in-memory per alamat IP klien dengan goroutine pembersih data usang berkala. Pendekatan ini menghindari ketergantungan infrastruktur Redis untuk deployment satu instance, namun siap dipindahkan ke Redis jika aplikasi di-deploy secara multi-node.
+- **Rate Limiter & SSE Hub In-Memory:** Rate limiter token bucket dan SSE Hub diimplementasikan secara in-memory per alamat instance dengan goroutine pembersih data usang berkala. Pendekatan ini menghindari ketergantungan Redis untuk deployment satu instance, namun siap dipindahkan ke Redis Pub/Sub jika aplikasi di-deploy secara multi-node.
 - **Penyimpanan Berkas Lokal Terisolasi:** Berkas lampiran disimpan pada volume direktori lokal terisolasi dalam container Docker. Pada skala enterprise, ini dapat dialihkan ke layanan Object Storage S3 yang kompatibel.
 
 ### 4. Rencana Pengembangan Lanjutan
 Apabila diberikan waktu pengembangan lebih lanjut, perbaikan yang akan saya prioritaskan adalah:
 1. **SLA Escalation Worker:** Membuat background worker terjadwal untuk mengirimkan notifikasi eskalasi otomatis ke email manager jika tiket berstatus urgent belum ditangani menjelang batas SLA.
 2. **Object Storage Integration:** Integrasi penyimpanan berkas ke AWS S3 atau MinIO menggunakan mekanisme presigned URL.
-3. **Pembaruan Real-time:** Menambahkan Server-Sent Events (SSE) atau WebSocket agar pembaruan status dan komentar baru dari teknisi dapat langsung tampil pada layar pemohon tanpa reload manual.
+3. **Multi-Instance SSE Pub/Sub:** Menghubungkan SSE Hub dengan Redis Pub/Sub untuk sinkronisasi notifikasi real-time lintas replika container horizontal.
