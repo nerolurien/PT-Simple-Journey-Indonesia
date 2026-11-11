@@ -50,8 +50,8 @@ func NewTicketRepository(pool *pgxpool.Pool) *TicketRepository {
 
 func (r *TicketRepository) Create(ctx context.Context, t *domain.Ticket) (*domain.Ticket, error) {
 	query := `
-		INSERT INTO tickets (title, description, category, priority, status, requester_id, assignee_id, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
+		INSERT INTO tickets (title, description, category, priority, status, requester_id, assignee_id, first_responded_at, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
 		RETURNING id, created_at, updated_at
 	`
 	now := time.Now().UTC()
@@ -63,6 +63,7 @@ func (r *TicketRepository) Create(ctx context.Context, t *domain.Ticket) (*domai
 		t.Status,
 		t.RequesterID,
 		t.AssigneeID,
+		t.FirstRespondedAt,
 		now,
 	).Scan(&t.ID, &t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
@@ -76,7 +77,7 @@ func (r *TicketRepository) GetByID(ctx context.Context, id int64) (*domain.Ticke
 	query := `
 		SELECT
 			t.id, t.title, t.description, t.category, t.priority, t.status,
-			t.requester_id, t.assignee_id, t.created_at, t.updated_at,
+			t.requester_id, t.assignee_id, t.first_responded_at, t.created_at, t.updated_at,
 			req.id, req.name, req.email, req.role,
 			asg.id, asg.name, asg.email, asg.role
 		FROM tickets t
@@ -93,7 +94,7 @@ func (r *TicketRepository) GetByID(ctx context.Context, id int64) (*domain.Ticke
 
 	err := r.pool.QueryRow(ctx, query, id).Scan(
 		&t.ID, &t.Title, &t.Description, &t.Category, &t.Priority, &t.Status,
-		&t.RequesterID, &t.AssigneeID, &t.CreatedAt, &t.UpdatedAt,
+		&t.RequesterID, &t.AssigneeID, &t.FirstRespondedAt, &t.CreatedAt, &t.UpdatedAt,
 		&reqUser.ID, &reqUser.Name, &reqUser.Email, &reqUser.Role,
 		&asgID, &asgName, &asgEmail, &asgRole,
 	)
@@ -226,7 +227,7 @@ func (r *TicketRepository) List(ctx context.Context, filter TicketFilter) (*Tick
 	selectQuery := fmt.Sprintf(`
 		SELECT
 			t.id, t.title, t.description, t.category, t.priority, t.status,
-			t.requester_id, t.assignee_id, t.created_at, t.updated_at,
+			t.requester_id, t.assignee_id, t.first_responded_at, t.created_at, t.updated_at,
 			req.id, req.name, req.email, req.role,
 			asg.id, asg.name, asg.email, asg.role
 		FROM tickets t
@@ -254,7 +255,7 @@ func (r *TicketRepository) List(ctx context.Context, filter TicketFilter) (*Tick
 
 		if err := rows.Scan(
 			&t.ID, &t.Title, &t.Description, &t.Category, &t.Priority, &t.Status,
-			&t.RequesterID, &t.AssigneeID, &t.CreatedAt, &t.UpdatedAt,
+			&t.RequesterID, &t.AssigneeID, &t.FirstRespondedAt, &t.CreatedAt, &t.UpdatedAt,
 			&reqUser.ID, &reqUser.Name, &reqUser.Email, &reqUser.Role,
 			&asgID, &asgName, &asgEmail, &asgRole,
 		); err != nil {
@@ -292,11 +293,11 @@ func (r *TicketRepository) List(ctx context.Context, filter TicketFilter) (*Tick
 func (r *TicketRepository) Update(ctx context.Context, t *domain.Ticket) (*domain.Ticket, error) {
 	query := `
 		UPDATE tickets
-		SET status = $1, priority = $2, assignee_id = $3, updated_at = $4
-		WHERE id = $5
+		SET status = $1, priority = $2, assignee_id = $3, first_responded_at = $4, updated_at = $5
+		WHERE id = $6
 	`
 	now := time.Now().UTC()
-	cmd, err := r.pool.Exec(ctx, query, t.Status, t.Priority, t.AssigneeID, now, t.ID)
+	cmd, err := r.pool.Exec(ctx, query, t.Status, t.Priority, t.AssigneeID, t.FirstRespondedAt, now, t.ID)
 	if err != nil {
 		return nil, fmt.Errorf("update ticket: %w", err)
 	}

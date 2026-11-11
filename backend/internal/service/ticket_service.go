@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"simplejourney/helpdesk/backend/internal/domain"
 	"simplejourney/helpdesk/backend/internal/repository"
@@ -27,14 +28,19 @@ type UserRepository interface {
 }
 
 type TicketService struct {
-	ticketRepo TicketRepository
-	userRepo   UserRepository
+	ticketRepo     TicketRepository
+	userRepo       UserRepository
+	slaUrgentHours int
 }
 
-func NewTicketService(ticketRepo TicketRepository, userRepo UserRepository) *TicketService {
+func NewTicketService(ticketRepo TicketRepository, userRepo UserRepository, slaUrgentHours int) *TicketService {
+	if slaUrgentHours <= 0 {
+		slaUrgentHours = 2
+	}
 	return &TicketService{
-		ticketRepo: ticketRepo,
-		userRepo:   userRepo,
+		ticketRepo:     ticketRepo,
+		userRepo:       userRepo,
+		slaUrgentHours: slaUrgentHours,
 	}
 }
 
@@ -85,7 +91,12 @@ func (s *TicketService) CreateTicket(ctx context.Context, requesterID int64, inp
 		RequesterID: requesterID,
 	}
 
-	return s.ticketRepo.Create(ctx, ticket)
+	created, err := s.ticketRepo.Create(ctx, ticket)
+	if err != nil {
+		return nil, err
+	}
+	created.CalculateSLA(s.slaUrgentHours, time.Now().UTC())
+	return created, nil
 }
 
 func (s *TicketService) ListTickets(ctx context.Context, currentUserID int64, role domain.Role, filter repository.TicketFilter) (*repository.TicketListResult, error) {
@@ -93,7 +104,17 @@ func (s *TicketService) ListTickets(ctx context.Context, currentUserID int64, ro
 		filter.RequesterID = &currentUserID
 	}
 
-	return s.ticketRepo.List(ctx, filter)
+	res, err := s.ticketRepo.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	for _, t := range res.Tickets {
+		t.CalculateSLA(s.slaUrgentHours, now)
+	}
+
+	return res, nil
 }
 
 func (s *TicketService) GetTicketByID(ctx context.Context, currentUserID int64, role domain.Role, id int64) (*domain.Ticket, error) {
@@ -115,6 +136,8 @@ func (s *TicketService) GetTicketByID(ctx context.Context, currentUserID int64, 
 		}
 		ticket.Comments = sanitizedComments
 	}
+
+	ticket.CalculateSLA(s.slaUrgentHours, time.Now().UTC())
 
 	return ticket, nil
 }
@@ -146,6 +169,10 @@ func (s *TicketService) UpdateTicket(ctx context.Context, currentUserID int64, r
 		if input.Status != nil {
 			if err := domain.ValidateStatusTransition(ticket.Status, *input.Status, role, isOwner); err != nil {
 				return nil, err
+			}
+			if ticket.Status == domain.StatusOpen && *input.Status == domain.StatusInProgress && ticket.FirstRespondedAt == nil {
+				now := time.Now().UTC()
+				ticket.FirstRespondedAt = &now
 			}
 			ticket.Status = *input.Status
 		}
@@ -187,6 +214,10 @@ func (s *TicketService) UpdateTicket(ctx context.Context, currentUserID int64, r
 		}
 		updated.Comments = sanitizedComments
 	}
+
+	updated.CalculateSLA(s.slaUrgentHours, time.Now().UTC())
+
+	return updated, nil
 
 	return updated, nil
 }

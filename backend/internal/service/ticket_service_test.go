@@ -84,7 +84,7 @@ func (u *inMemoryUserRepo) GetByID(ctx context.Context, id int64) (*domain.User,
 func TestTicketAccess_IDORProtection(t *testing.T) {
 	repo := newInMemoryTicketRepo()
 	userRepo := &inMemoryUserRepo{users: make(map[int64]*domain.User)}
-	svc := NewTicketService(repo, userRepo)
+	svc := NewTicketService(repo, userRepo, 2)
 	ctx := context.Background()
 
 	requesterA := int64(101) // Siti Rahmawati
@@ -139,7 +139,7 @@ func TestTicketAccess_IDORProtection(t *testing.T) {
 func TestTicketComments_InternalNoteFiltering(t *testing.T) {
 	repo := newInMemoryTicketRepo()
 	userRepo := &inMemoryUserRepo{users: make(map[int64]*domain.User)}
-	svc := NewTicketService(repo, userRepo)
+	svc := NewTicketService(repo, userRepo, 2)
 	ctx := context.Background()
 
 	requesterID := int64(101) // Siti Rahmawati
@@ -206,5 +206,95 @@ func TestTicketComments_InternalNoteFiltering(t *testing.T) {
 	}
 	if len(agentView.Comments) != 2 {
 		t.Fatalf("expected 2 comments untuk agent (publik + internal), got %d", len(agentView.Comments))
+	}
+}
+
+func TestTicket_SLABreachCalculation(t *testing.T) {
+	now := time.Now().UTC()
+
+	tests := []struct {
+		name           string
+		priority       domain.Priority
+		status         domain.Status
+		createdAt      time.Time
+		urgentHours    int
+		expectBreach   bool
+		expectDeadline bool
+	}{
+		{
+			name:           "urgent open ticket older than SLA limit is breached",
+			priority:       domain.PriorityUrgent,
+			status:         domain.StatusOpen,
+			createdAt:      now.Add(-3 * time.Hour),
+			urgentHours:    2,
+			expectBreach:   true,
+			expectDeadline: true,
+		},
+		{
+			name:           "urgent open ticket newer than SLA limit is not breached",
+			priority:       domain.PriorityUrgent,
+			status:         domain.StatusOpen,
+			createdAt:      now.Add(-1 * time.Hour),
+			urgentHours:    2,
+			expectBreach:   false,
+			expectDeadline: true,
+		},
+		{
+			name:           "urgent in_progress ticket is not breached",
+			priority:       domain.PriorityUrgent,
+			status:         domain.StatusInProgress,
+			createdAt:      now.Add(-5 * time.Hour),
+			urgentHours:    2,
+			expectBreach:   false,
+			expectDeadline: true,
+		},
+		{
+			name:           "urgent resolved ticket is not breached",
+			priority:       domain.PriorityUrgent,
+			status:         domain.StatusResolved,
+			createdAt:      now.Add(-5 * time.Hour),
+			urgentHours:    2,
+			expectBreach:   false,
+			expectDeadline: true,
+		},
+		{
+			name:           "high priority open ticket is not subject to urgent SLA",
+			priority:       domain.PriorityHigh,
+			status:         domain.StatusOpen,
+			createdAt:      now.Add(-10 * time.Hour),
+			urgentHours:    2,
+			expectBreach:   false,
+			expectDeadline: false,
+		},
+		{
+			name:           "medium priority open ticket is not subject to urgent SLA",
+			priority:       domain.PriorityMedium,
+			status:         domain.StatusOpen,
+			createdAt:      now.Add(-24 * time.Hour),
+			urgentHours:    2,
+			expectBreach:   false,
+			expectDeadline: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ticket := &domain.Ticket{
+				Priority:  tc.priority,
+				Status:    tc.status,
+				CreatedAt: tc.createdAt,
+			}
+			ticket.CalculateSLA(tc.urgentHours, now)
+
+			if ticket.IsSLABreached != tc.expectBreach {
+				t.Errorf("expected IsSLABreached = %v, got %v", tc.expectBreach, ticket.IsSLABreached)
+			}
+			if tc.expectDeadline && ticket.SLADeadline == nil {
+				t.Errorf("expected SLADeadline to be set")
+			}
+			if !tc.expectDeadline && ticket.SLADeadline != nil {
+				t.Errorf("expected SLADeadline to be nil, got %v", ticket.SLADeadline)
+			}
+		})
 	}
 }

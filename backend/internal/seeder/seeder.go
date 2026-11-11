@@ -27,6 +27,7 @@ type SeedTicket struct {
 	Status         domain.Status
 	RequesterEmail string
 	AssigneeEmail  string
+	CreatedAt      *time.Time
 	Comments       []SeedComment
 }
 
@@ -168,6 +169,23 @@ func Seed(ctx context.Context, pool *pgxpool.Pool) error {
 				},
 			},
 		},
+		{
+			Title:          "Database server staging connection pool exhausted",
+			Description:    "Layanan backend staging gagal terhubung ke PostgreSQL dengan error max connections reached. Tim QA terblokir untuk verifikasi rilis sprint.",
+			Category:       "Database",
+			Priority:       domain.PriorityUrgent,
+			Status:         domain.StatusOpen,
+			RequesterEmail: "dewi.lestari@simplejourney.co.id",
+			AssigneeEmail:  "",
+			CreatedAt:      func() *time.Time { t := time.Now().UTC().Add(-4 * time.Hour); return &t }(),
+			Comments: []SeedComment{
+				{
+					AuthorEmail: "dewi.lestari@simplejourney.co.id",
+					Body:        "Mohon dibantu restart service atau terminasi idle connection.",
+					IsInternal:  false,
+				},
+			},
+		},
 	}
 
 	for _, t := range tickets {
@@ -191,11 +209,15 @@ func Seed(ctx context.Context, pool *pgxpool.Pool) error {
 		if err != nil {
 			if err == pgx.ErrNoRows {
 				now := time.Now().UTC()
+				createdAt := now
+				if t.CreatedAt != nil {
+					createdAt = *t.CreatedAt
+				}
 				err = pool.QueryRow(ctx, `
-					INSERT INTO tickets (title, description, category, priority, status, requester_id, assignee_id, created_at, updated_at)
-					VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
+					INSERT INTO tickets (title, description, category, priority, status, requester_id, assignee_id, first_responded_at, created_at, updated_at)
+					VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, $8, $8)
 					RETURNING id
-				`, t.Title, t.Description, t.Category, t.Priority, t.Status, requesterID, assigneeID, now).Scan(&ticketID)
+				`, t.Title, t.Description, t.Category, t.Priority, t.Status, requesterID, assigneeID, createdAt).Scan(&ticketID)
 				if err != nil {
 					return fmt.Errorf("insert ticket %s: %w", t.Title, err)
 				}

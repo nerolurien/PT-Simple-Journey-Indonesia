@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS tickets (
     status VARCHAR(32) NOT NULL CHECK (status IN ('open', 'in_progress', 'resolved', 'closed')),
     requester_id BIGINT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
     assignee_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
+    first_responded_at TIMESTAMPTZ NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

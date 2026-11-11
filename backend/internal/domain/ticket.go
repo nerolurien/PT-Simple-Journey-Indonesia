@@ -50,20 +50,39 @@ func (p Priority) IsValid() bool {
 }
 
 type Ticket struct {
-	ID          int64     `json:"id"`
-	Title       string    `json:"title"`
-	Description string    `json:"description"`
-	Category    string    `json:"category"`
-	Priority    Priority  `json:"priority"`
-	Status      Status    `json:"status"`
-	RequesterID int64     `json:"requester_id"`
-	AssigneeID  *int64    `json:"assignee_id"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID               int64      `json:"id"`
+	Title            string     `json:"title"`
+	Description      string     `json:"description"`
+	Category         string     `json:"category"`
+	Priority         Priority   `json:"priority"`
+	Status           Status     `json:"status"`
+	RequesterID      int64      `json:"requester_id"`
+	AssigneeID       *int64     `json:"assignee_id"`
+	FirstRespondedAt *time.Time `json:"first_responded_at,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+	IsSLABreached    bool       `json:"is_sla_breached"`
+	SLADeadline      *time.Time `json:"sla_deadline,omitempty"`
 
 	Requester *User     `json:"requester,omitempty"`
 	Assignee  *User     `json:"assignee,omitempty"`
 	Comments  []Comment `json:"comments,omitempty"`
+}
+
+func (t *Ticket) CalculateSLA(urgentHours int, now time.Time) {
+	if urgentHours <= 0 {
+		urgentHours = 2
+	}
+
+	if t.Priority == PriorityUrgent {
+		deadline := t.CreatedAt.Add(time.Duration(urgentHours) * time.Hour)
+		t.SLADeadline = &deadline
+		t.IsSLABreached = t.Status == StatusOpen && now.After(deadline)
+		return
+	}
+
+	t.SLADeadline = nil
+	t.IsSLABreached = false
 }
 
 func ValidateStatusTransition(from, to Status, role Role, isOwner bool) error {

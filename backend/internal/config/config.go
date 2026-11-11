@@ -18,6 +18,7 @@ type Config struct {
 	CORSAllowedOrigins []string
 	RateLimitRPS       float64
 	RateLimitBurst     int
+	SLAUrgentHours     int
 }
 
 func Load() (*Config, error) {
@@ -70,6 +71,11 @@ func Load() (*Config, error) {
 		rateBurst = 10
 	}
 
+	slaHours, err := strconv.Atoi(getEnv("SLA_URGENT_HOURS", "2"))
+	if err != nil || slaHours <= 0 {
+		slaHours = 2
+	}
+
 	return &Config{
 		Port:               port,
 		Env:                env,
@@ -78,6 +84,7 @@ func Load() (*Config, error) {
 		CORSAllowedOrigins: origins,
 		RateLimitRPS:       rateRPS,
 		RateLimitBurst:     rateBurst,
+		SLAUrgentHours:     slaHours,
 	}, nil
 }
 

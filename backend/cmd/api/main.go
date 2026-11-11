@@ -56,7 +56,7 @@ func main() {
 	userHandler := handler.NewUserHandler(userService)
 
 	ticketRepo := repository.NewTicketRepository(pool)
-	ticketService := service.NewTicketService(ticketRepo, userRepo)
+	ticketService := service.NewTicketService(ticketRepo, userRepo, cfg.SLAUrgentHours)
 	ticketHandler := handler.NewTicketHandler(ticketService)
 
 	limiter := middleware.NewIPRateLimiter(cfg.RateLimitRPS, cfg.RateLimitBurst)
